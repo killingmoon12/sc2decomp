@@ -1,0 +1,11 @@
+--- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/Survivalcraft/Game/ExternalContentManager.cs	2026-10-19 15:19:41.730996819 +0300
++++ src/Survivalcraft/Game/ExternalContentManager.cs	2026-10-19 16:16:04.394828326 +0300
+@@ -28,7 +28,7 @@
+ 	public static void Initialize()
+ 	{
+ 		m_providers = new List<IExternalContentProvider>();
+-		m_providers.Add(new AndroidSdCardExternalContentProvider());
++		m_providers.Add(new LinuxExternalContentProvider());
+ 		m_providers.Add(new DropboxExternalContentProvider());
+ 	}
+ 

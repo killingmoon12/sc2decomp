@@ -1,0 +1,25 @@
+--- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/Survivalcraft/Game/WebManager.cs	2026-10-19 15:19:43.210012334 +0300
++++ src/Survivalcraft/Game/WebManager.cs	2026-10-19 16:14:19.335676128 +0300
+@@ -3,9 +3,9 @@
+ using System.IO;
+ using System.Net;
+ using System.Net.Http;
++using System.Net.NetworkInformation;
+ using System.Text;
+ using System.Threading.Tasks;
+-using Android.Net;
+ using Engine;
+ using SimpleJson;
+ 
+@@ -59,7 +59,10 @@
+ 	{
+ 		try
+ 		{
+-			return ((ConnectivityManager)Window.Activity.GetSystemService("connectivity")).ActiveNetworkInfo?.IsConnected ?? false;
++			// Simple connectivity check - try to reach a known host
++			using var ping = new Ping();
++			var reply = ping.Send("8.8.8.8", 1000);
++			return reply?.Status == IPStatus.Success;
+ 		}
+ 		catch (Exception e)
+ 		{

@@ -1,0 +1,192 @@
+--- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/Survivalcraft/Game/AndroidSdCardExternalContentProvider.cs	2026-10-19 15:19:41.945999074 +0300
++++ src/Survivalcraft/Game/AndroidSdCardExternalContentProvider.cs	2026-10-19 16:15:50.977681179 +0300
+@@ -2,15 +2,14 @@
+ using System.IO;
+ using System.Threading;
+ using Engine;
+-using Java.IO;
+ 
+ namespace Game;
+ 
+-public class AndroidSdCardExternalContentProvider : IExternalContentProvider, IDisposable
++public class LinuxExternalContentProvider : IExternalContentProvider, IDisposable
+ {
+ 	private string m_rootDirectory;
+ 
+-	public string DisplayName => "SD Card";
++	public string DisplayName => "Local Files";
+ 
+ 	public string Description
+ 	{
+@@ -22,26 +21,18 @@
+ 	}
+ 
+ 	public bool SupportsListing => true;
+-
+ 	public bool SupportsLinks => false;
+-
+ 	public bool RequiresLogin => false;
+-
+ 	public bool IsLoggedIn => true;
+ 
+-	public void Dispose()
+-	{
+-	}
++	public void Dispose() { }
+ 
+ 	public void Login(CancellableProgress progress, Action success, Action<Exception> failure)
+ 	{
+ 		failure(new NotSupportedException());
+ 	}
+ 
+-	public void Logout()
+-	{
+-		throw new NotSupportedException();
+-	}
++	public void Logout() { throw new NotSupportedException(); }
+ 
+ 	public void List(string path, CancellableProgress progress, Action<ExternalContentEntry> success, Action<Exception> failure)
+ 	{
+@@ -52,19 +43,11 @@
+ 				InitializeFilesystemAccess();
+ 				string internalPath = ToInternalPath(path);
+ 				ExternalContentEntry entry = GetDirectoryEntry(internalPath, scanContents: true);
+-				Dispatcher.Dispatch(() =>
+-				{
+-					success(entry);
+-				});
++				Dispatcher.Dispatch(() => success(entry));
+ 			}
+ 			catch (Exception ex)
+ 			{
+-				Exception ex2 = ex;
+-				Exception e = ex2;
+-				Dispatcher.Dispatch(() =>
+-				{
+-					failure(e);
+-				});
++				Dispatcher.Dispatch(() => failure(ex));
+ 			}
+ 		});
+ 	}
+@@ -77,20 +60,12 @@
+ 			{
+ 				InitializeFilesystemAccess();
+ 				string path2 = ToInternalPath(path);
+-				FileStream stream = new FileStream(path2, FileMode.Open, FileAccess.Read, FileShare.Read);
+-				Dispatcher.Dispatch(() =>
+-				{
+-					success(stream);
+-				});
++				var stream = new FileStream(path2, FileMode.Open, FileAccess.Read, FileShare.Read);
++				Dispatcher.Dispatch(() => success(stream));
+ 			}
+ 			catch (Exception ex)
+ 			{
+-				Exception ex2 = ex;
+-				Exception e = ex2;
+-				Dispatcher.Dispatch(() =>
+-				{
+-					failure(e);
+-				});
++				Dispatcher.Dispatch(() => failure(ex));
+ 			}
+ 		});
+ 	}
+@@ -108,19 +83,11 @@
+ 				{
+ 					stream.CopyTo(destination);
+ 				}
+-				Dispatcher.Dispatch(() =>
+-				{
+-					success(null);
+-				});
++				Dispatcher.Dispatch(() => success(null));
+ 			}
+ 			catch (Exception ex)
+ 			{
+-				Exception ex2 = ex;
+-				Exception e = ex2;
+-				Dispatcher.Dispatch(() =>
+-				{
+-					failure(e);
+-				});
++				Dispatcher.Dispatch(() => failure(ex));
+ 			}
+ 		});
+ 	}
+@@ -138,22 +105,26 @@
+ 		externalContentEntry.Time = new DateTime(1970, 1, 1);
+ 		if (scanContents)
+ 		{
+-			string[] directories = Directory.GetDirectories(internalPath);
+-			foreach (string internalPath2 in directories)
+-			{
+-				externalContentEntry.ChildEntries.Add(GetDirectoryEntry(internalPath2, scanContents: false));
+-			}
+-			directories = Directory.GetFiles(internalPath);
+-			foreach (string text in directories)
++			try
+ 			{
+-				FileInfo fileInfo = new FileInfo(text);
+-				ExternalContentEntry externalContentEntry2 = new ExternalContentEntry();
+-				externalContentEntry2.Type = ExternalContentManager.ExtensionToType(Path.GetExtension(text));
+-				externalContentEntry2.Path = ToExternalPath(text);
+-				externalContentEntry2.Size = fileInfo.Length;
+-				externalContentEntry2.Time = fileInfo.CreationTime;
+-				externalContentEntry.ChildEntries.Add(externalContentEntry2);
++				string[] directories = Directory.GetDirectories(internalPath);
++				foreach (string internalPath2 in directories)
++				{
++					externalContentEntry.ChildEntries.Add(GetDirectoryEntry(internalPath2, scanContents: false));
++				}
++				directories = Directory.GetFiles(internalPath);
++				foreach (string text in directories)
++				{
++					FileInfo fileInfo = new FileInfo(text);
++					ExternalContentEntry externalContentEntry2 = new ExternalContentEntry();
++					externalContentEntry2.Type = ExternalContentManager.ExtensionToType(Path.GetExtension(text));
++					externalContentEntry2.Path = ToExternalPath(text);
++					externalContentEntry2.Size = fileInfo.Length;
++					externalContentEntry2.Time = fileInfo.CreationTime;
++					externalContentEntry.ChildEntries.Add(externalContentEntry2);
++				}
+ 			}
++			catch { }
+ 		}
+ 		return externalContentEntry;
+ 	}
+@@ -162,7 +133,7 @@
+ 	{
+ 		int num = 1;
+ 		string text = path;
+-		while (System.IO.File.Exists(text) && num < 1000)
++		while (File.Exists(text) && num < 1000)
+ 		{
+ 			string path2 = Path.GetFileNameWithoutExtension(path) + num + Path.GetExtension(path);
+ 			text = Path.Combine(Path.GetDirectoryName(path), path2);
+@@ -173,17 +144,18 @@
+ 
+ 	private string ToExternalPath(string internalPath)
+ 	{
+-		return Path.GetFullPath(internalPath).Remove(0, m_rootDirectory.Length);
++		var full = Path.GetFullPath(internalPath);
++		return full.Remove(0, m_rootDirectory.Length);
+ 	}
+ 
+ 	private string ToInternalPath(string externalPath)
+ 	{
+-		return Path.GetFullPath(Path.Combine(m_rootDirectory, externalPath.TrimStart(new char[1] { '/' })));
++		return Path.GetFullPath(Path.Combine(m_rootDirectory, externalPath.TrimStart('/')));
+ 	}
+ 
+ 	private void InitializeFilesystemAccess()
+ 	{
+-		Java.IO.File externalFilesDir = Window.Activity.GetExternalFilesDir(null);
+-		m_rootDirectory = ((externalFilesDir != null) ? externalFilesDir.AbsolutePath : "/data");
++		m_rootDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "SurvivalcraftExternal");
++		Directory.CreateDirectory(m_rootDirectory);
+ 	}
+-}
++}
+\ No newline at end of file

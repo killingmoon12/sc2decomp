@@ -1,0 +1,46 @@
+--- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/OpenTK-1.0/OpenTK/Vector3d.cs	2026-10-19 15:19:34.913925306 +0300
++++ src/OpenTK-1.0/OpenTK/Vector3d.cs	2026-10-19 15:50:28.755387613 +0300
+@@ -375,39 +375,10 @@
+ 
+ 	public static void Clamp(ref Vector3d vec, ref Vector3d min, ref Vector3d max, out Vector3d result)
+ 	{
+-		ref double x = ref result.X;
+-		double num;
+-		if (vec.X < min.X)
+-		{
+-			num = min.X;
+-		}
+-		else
+-		{
+-			num = ((vec.X > max.X) ? max.X : vec.X);
+-		}
+-		x = num;
+-		ref double y = ref result.Y;
+-		double num2;
+-		if (vec.Y < min.Y)
+-		{
+-			num2 = min.Y;
+-		}
+-		else
+-		{
+-			num2 = ((vec.Y > max.Y) ? max.Y : vec.Y);
+-		}
+-		y = num2;
+-		ref double z = ref result.Z;
+-		double num3;
+-		if (vec.Z < min.Z)
+-		{
+-			num3 = min.Z;
+-		}
+-		else
+-		{
+-			num3 = ((vec.Z > max.Z) ? max.Z : vec.Z);
+-		}
+-		z = num3;
++		result = new Vector3d();
++		result.X = vec.X < min.X ? min.X : (vec.X > max.X ? max.X : vec.X);
++		result.Y = vec.Y < min.Y ? min.Y : (vec.Y > max.Y ? max.Y : vec.Y);
++		result.Z = vec.Z < min.Z ? min.Z : (vec.Z > max.Z ? max.Z : vec.Z);
+ 	}
+ 
+ 	public static Vector3d Normalize(Vector3d vec)

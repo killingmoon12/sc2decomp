@@ -1,0 +1,289 @@
+--- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/OpenTK-1.0/OpenTK.Platform/Factory.cs	2026-10-19 15:19:35.257928914 +0300
++++ src/OpenTK-1.0/OpenTK.Platform/Factory.cs	2026-10-19 15:41:26.472637519 +0300
+@@ -1,159 +1,134 @@
+ using System;
+ using OpenTK.Graphics;
+ using OpenTK.Input;
+-using OpenTK.Platform.Android;
+-using OpenTK.Platform.Egl;
++using OpenTK.Platform.Linux;
+ 
+ namespace OpenTK.Platform;
+ 
+ internal sealed class Factory : IPlatformFactory
+ {
+-	private class UnsupportedPlatform : IPlatformFactory
+-	{
+-		private static readonly string error_string = "Please, refer to http://www.opentk.com for more information.";
+-
+-		public INativeWindow CreateNativeWindow(int x, int y, int width, int height, string title, GraphicsMode mode, GameWindowFlags options, DisplayDevice device)
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public IDisplayDeviceDriver CreateDisplayDeviceDriver()
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public IGraphicsContext CreateGLContext(GraphicsMode mode, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public IGraphicsContext CreateGLContext(ContextHandle handle, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public IGraphicsContext CreateESContext(GraphicsMode mode, IWindowInfo window, IGraphicsContext shareContext, int major, int minor, GraphicsContextFlags flags)
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public GraphicsContext.GetCurrentContextDelegate CreateGetCurrentGraphicsContext()
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public IGraphicsMode CreateGraphicsMode()
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public IKeyboardDriver2 CreateKeyboardDriver()
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-
+-		public IMouseDriver2 CreateMouseDriver()
+-		{
+-			throw new PlatformNotSupportedException(error_string);
+-		}
+-	}
+-
+-	private static IPlatformFactory default_implementation;
+-
+-	private static IPlatformFactory embedded_implementation;
+-
+-	public static IPlatformFactory Default
+-	{
+-		get
+-		{
+-			return default_implementation;
+-		}
+-		private set
+-		{
+-			default_implementation = value;
+-		}
+-	}
+-
+-	public static IPlatformFactory Embedded
+-	{
+-		get
+-		{
+-			return embedded_implementation;
+-		}
+-		private set
+-		{
+-			embedded_implementation = value;
+-		}
+-	}
+-
+-	static Factory()
+-	{
+-		if (Configuration.RunningOnAndroid)
+-		{
+-			Default = new AndroidFactory();
+-		}
+-		else
+-		{
+-			Default = new UnsupportedPlatform();
+-		}
+-		if (OpenTK.Platform.Egl.Egl.IsSupported)
+-		{
+-			if (Configuration.RunningOnAndroid)
+-			{
+-				Embedded = new EglAndroidPlatformFactory();
+-			}
+-			else
+-			{
+-				Embedded = new UnsupportedPlatform();
+-			}
+-		}
+-		else
+-		{
+-			Embedded = new UnsupportedPlatform();
+-		}
+-		if (Default is UnsupportedPlatform && !(Embedded is UnsupportedPlatform))
+-		{
+-			Default = Embedded;
+-		}
+-	}
+-
+-	public INativeWindow CreateNativeWindow(int x, int y, int width, int height, string title, GraphicsMode mode, GameWindowFlags options, DisplayDevice device)
+-	{
+-		return default_implementation.CreateNativeWindow(x, y, width, height, title, mode, options, device);
+-	}
+-
+-	public IDisplayDeviceDriver CreateDisplayDeviceDriver()
+-	{
+-		return default_implementation.CreateDisplayDeviceDriver();
+-	}
+-
+-	public IGraphicsContext CreateGLContext(GraphicsMode mode, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
+-	{
+-		return default_implementation.CreateGLContext(mode, window, shareContext, directRendering, major, minor, flags);
+-	}
+-
+-	public IGraphicsContext CreateGLContext(ContextHandle handle, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
+-	{
+-		return default_implementation.CreateGLContext(handle, window, shareContext, directRendering, major, minor, flags);
+-	}
+-
+-	public GraphicsContext.GetCurrentContextDelegate CreateGetCurrentGraphicsContext()
+-	{
+-		return default_implementation.CreateGetCurrentGraphicsContext();
+-	}
+-
+-	public IGraphicsMode CreateGraphicsMode()
+-	{
+-		return default_implementation.CreateGraphicsMode();
+-	}
+-
+-	public IKeyboardDriver2 CreateKeyboardDriver()
+-	{
+-		return default_implementation.CreateKeyboardDriver();
+-	}
+-
+-	public IMouseDriver2 CreateMouseDriver()
+-	{
+-		return default_implementation.CreateMouseDriver();
+-	}
+-}
++    private class UnsupportedPlatform : IPlatformFactory
++    {
++        private static readonly string error_string = "Please, refer to http://www.opentk.com for more information.";
++
++        public INativeWindow CreateNativeWindow(int x, int y, int width, int height, string title, GraphicsMode mode, GameWindowFlags options, DisplayDevice device)
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public IDisplayDeviceDriver CreateDisplayDeviceDriver()
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public IGraphicsContext CreateGLContext(GraphicsMode mode, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public IGraphicsContext CreateGLContext(ContextHandle handle, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public IGraphicsContext CreateESContext(GraphicsMode mode, IWindowInfo window, IGraphicsContext shareContext, int major, int minor, GraphicsContextFlags flags)
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public GraphicsContext.GetCurrentContextDelegate CreateGetCurrentGraphicsContext()
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public IGraphicsMode CreateGraphicsMode()
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public IKeyboardDriver2 CreateKeyboardDriver()
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++
++        public IMouseDriver2 CreateMouseDriver()
++        {
++            throw new PlatformNotSupportedException(error_string);
++        }
++    }
++
++    private static IPlatformFactory default_implementation;
++
++    private static IPlatformFactory embedded_implementation;
++
++    public static IPlatformFactory Default
++    {
++        get
++        {
++            return default_implementation;
++        }
++        private set
++        {
++            default_implementation = value;
++        }
++    }
++
++    public static IPlatformFactory Embedded
++    {
++        get
++        {
++            return embedded_implementation;
++        }
++        private set
++        {
++            embedded_implementation = value;
++        }
++    }
++
++    static Factory()
++    {
++        // Use Linux factory by default
++        Default = new LinuxFactory();
++        Embedded = new LinuxFactory();
++    }
++
++    public INativeWindow CreateNativeWindow(int x, int y, int width, int height, string title, GraphicsMode mode, GameWindowFlags options, DisplayDevice device)
++    {
++        return default_implementation.CreateNativeWindow(x, y, width, height, title, mode, options, device);
++    }
++
++    public IDisplayDeviceDriver CreateDisplayDeviceDriver()
++    {
++        return default_implementation.CreateDisplayDeviceDriver();
++    }
++
++    public IGraphicsContext CreateGLContext(GraphicsMode mode, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
++    {
++        return default_implementation.CreateGLContext(mode, window, shareContext, directRendering, major, minor, flags);
++    }
++
++    public IGraphicsContext CreateGLContext(ContextHandle handle, IWindowInfo window, IGraphicsContext shareContext, bool directRendering, int major, int minor, GraphicsContextFlags flags)
++    {
++        return default_implementation.CreateGLContext(handle, window, shareContext, directRendering, major, minor, flags);
++    }
++
++    public GraphicsContext.GetCurrentContextDelegate CreateGetCurrentGraphicsContext()
++    {
++        return default_implementation.CreateGetCurrentGraphicsContext();
++    }
++
++    public IGraphicsMode CreateGraphicsMode()
++    {
++        return default_implementation.CreateGraphicsMode();
++    }
++
++    public IKeyboardDriver2 CreateKeyboardDriver()
++    {
++        return default_implementation.CreateKeyboardDriver();
++    }
++
++    public IMouseDriver2 CreateMouseDriver()
++    {
++        return default_implementation.CreateMouseDriver();
++    }
++}
+\ No newline at end of file

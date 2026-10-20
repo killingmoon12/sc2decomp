@@ -1,0 +1,2 @@
+using System; using System.Collections.Generic; using OpenTK; using OpenTK.Platform;
+namespace OpenTK.Platform.Linux { internal sealed class LinuxDisplayDeviceDriver : DisplayDeviceBase { public LinuxDisplayDeviceDriver() { Primary = new DisplayDevice(new DisplayResolution(0,0,1920,1080,32,60f), true, Array.Empty<DisplayResolution>(), new System.Drawing.Rectangle(0,0,1920,1080), null); } public override bool TryChangeResolution(DisplayDevice device, DisplayResolution resolution) => false; public override bool TryRestoreResolution(DisplayDevice device) => false; } }
