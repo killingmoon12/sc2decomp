@@ -3,7 +3,7 @@
 Bunch of scripts to decompile Survivalcraft 2 and build it.
 
 ## Getting Started
-Currently Linux is the only supported platform, other OSes are planned in future.
+Currently Linux is the only supported platform, other platforms are planned in future.
 
 ## Building
 Get your apk from the device where you bought the game and place it in the root of repository
