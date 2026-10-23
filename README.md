@@ -36,4 +36,4 @@ This project is licensed under the MIT License - see the LICENSE.md file for det
 
 # This project is made heavily using AI.
 
-## All right are reserved by Candy Rufus Games.
+## All rights are reserved by Candy Rufus Games.
