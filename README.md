@@ -1,6 +1,6 @@
 # SC2DECOMP
 
-Bunch of script to decompile Survivalcraft 2 and build it
+Bunch of scripts to decompile Survivalcraft 2 and build it.
 
 ## Getting Started
 Currently Linux is the only supported platform, other OSes are planned in future.
@@ -15,7 +15,7 @@ To build the game run:
 ```
 ./survivalcraft_linux/build_survivalcraft_linux.sh
 ```
-The built game will be located in:
+Built files will be located in:
 ```
 ./survivalcraft_linux/build/
 ```
@@ -34,8 +34,6 @@ dotnet Survivalcraft.dll
 
 This project is licensed under the MIT License - see the LICENSE.md file for details
 
-## Acknowledgments
-
-This project is made by heavily using AI.
+# This project is made heavily using AI.
 
 ## All right are reserved by Candy Rufus Games.
