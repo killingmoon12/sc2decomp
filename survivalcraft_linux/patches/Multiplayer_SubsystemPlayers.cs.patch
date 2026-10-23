@@ -1,0 +1,20 @@
+--- a/src/Survivalcraft/Game/SubsystemPlayers.cs
++++ src/Survivalcraft/Game/SubsystemPlayers.cs
+@@ -17,7 +17,7 @@
+ 
+ 	private int m_nextPlayerIndex;
+ 
+-	public const int MaxPlayers = 4;
++	public const int MaxPlayers = 8;
+ 
+ 	public ReadOnlyList<PlayerData> PlayersData => new ReadOnlyList<PlayerData>(m_playersData);
+ 
+@@ -61,7 +61,7 @@
+ 
+ 	public void AddPlayerData(PlayerData playerData)
+ 	{
+-		if (m_playersData.Count >= 4)
++		if (!playerData.IsRemote && m_playersData.Count >= MaxPlayers)
+ 		{
+ 			throw new InvalidOperationException("Too many players.");
+ 		}

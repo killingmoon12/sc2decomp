@@ -1,0 +1,38 @@
+--- a/src/Survivalcraft/Game/PlayScreen.cs
++++ src/Survivalcraft/Game/PlayScreen.cs
+@@ -4,6 +4,7 @@
+ using System.Threading.Tasks;
+ using System.Xml.Linq;
+ using Engine;
++using Multiplayer;
+ 
+ namespace Game;
+ 
+@@ -11,11 +12,15 @@
+ {
+ 	private ListPanelWidget m_worldsListWidget;
+ 
++	private MultiplayerScreen m_multiplayerScreen;
++
+ 	private long m_totalWorldsSize;
+ 
+ 	public PlayScreen()
+ 	{
+ 		XElement node = ContentManager.Get<XElement>("Screens/PlayScreen");
++		XElement newWorldButton = node.Descendants().First((XElement e) => e.Name.LocalName == "BevelledButtonWidget" && (string)e.Attribute("Name") == "NewWorld");
++		newWorldButton.AddAfterSelf(new XElement(newWorldButton.Name.Namespace + "BevelledButtonWidget", new XAttribute("Name", "Multiplayer"), new XAttribute("Style", "{Styles/ButtonStyle_310x60}"), new XAttribute("Text", "Multiplayer"), new XAttribute("VerticalAlignment", "Center")));
+ 		LoadContents(this, node);
+ 		m_worldsListWidget = Children.Find<ListPanelWidget>("WorldsList");
+ 		ListPanelWidget worldsListWidget = m_worldsListWidget;
+@@ -107,6 +112,11 @@
+ 				m_worldsListWidget.SelectedItem = null;
+ 			}
+ 		}
++		if (Children.Find<ButtonWidget>("Multiplayer").IsClicked)
++		{
++			m_multiplayerScreen ??= new MultiplayerScreen();
++			ScreensManager.SwitchScreen(m_multiplayerScreen);
++		}
+ 		if (Children.Find<ButtonWidget>("Properties").IsClicked && m_worldsListWidget.SelectedItem != null)
+ 		{
+ 			WorldInfo worldInfo = (WorldInfo)m_worldsListWidget.SelectedItem;

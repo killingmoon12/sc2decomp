@@ -1,0 +1,67 @@
+--- a/src/Survivalcraft/Game/GameMenuDialog.cs
++++ src/Survivalcraft/Game/GameMenuDialog.cs
+@@ -5,6 +5,7 @@
+ using Engine;
+ using Engine.Graphics;
+ using Engine.Media;
++using Multiplayer;
+ using GameEntitySystem;
+ 
+ namespace Game;
+@@ -257,6 +258,15 @@
+ 			{
+ 				ScreensManager.SwitchScreen("Players", m_componentPlayer.Project.FindSubsystem<SubsystemPlayers>(throwOnError: true));
+ 			}));
++			if (MultiplayerSession.Mode != MultiplayerSessionMode.None)
++			{
++				list.Add(new Tuple<string, Action>("Connected Players", delegate
++				{
++					SubsystemPlayers players = m_componentPlayer.Project.FindSubsystem<SubsystemPlayers>(throwOnError: true);
++					string text = MultiplayerSession.Status + "\n\n" + string.Join("\n", players.PlayersData.Select((PlayerData pd) => pd.Name));
++					DialogsManager.ShowDialog(ParentWidget, new MessageDialog("Connected Players", text, "OK", null, null));
++				}));
++			}
+ 			list.Add(new Tuple<string, Action>("Settings", () =>
+ 			{
+ 				ScreensManager.SwitchScreen("Settings");
+@@ -279,6 +289,11 @@
+ 					DialogsManager.ShowDialog(ParentWidget, new GamepadHelpDialog());
+ 				}));
+ 			}
++			if (!MultiplayerSession.IsJoinedWorld)
++			{
++				string hostAction = (MultiplayerSession.Mode == MultiplayerSessionMode.Host) ? "Stop Hosting" : "Host to LAN";
++				list.Add(new Tuple<string, Action>(hostAction, ToggleHosting));
++			}
+ 			ListSelectionDialog dialog = new ListSelectionDialog("More Actions", list, 60f, (object t) => ((Tuple<string, Action>)t).Item1, (object t) =>
+ 			{
+ 				((Tuple<string, Action>)t).Item2();
+@@ -298,6 +313,28 @@
+ 		}
+ 	}
+ 
++	private void ToggleHosting()
++	{
++		if (MultiplayerSession.Mode == MultiplayerSessionMode.Host)
++		{
++			MultiplayerSession.Stop();
++			DialogsManager.HideDialog(this);
++			m_componentPlayer.ComponentGui.DisplaySmallMessage("Stopped hosting", Color.White, blinking: false, playNotificationSound: true);
++			return;
++		}
++		MultiplayerSession.StartHost(MultiplayerSession.DefaultPort);
++		if (MultiplayerSession.Mode == MultiplayerSessionMode.Host)
++		{
++			DialogsManager.HideDialog(this);
++			m_componentPlayer.ComponentGui.DisplaySmallMessage($"Hosting on LAN at port {MultiplayerSession.DefaultPort}", Color.White, blinking: false, playNotificationSound: true);
++		}
++		else
++		{
++			DialogsManager.ShowDialog(ParentWidget, new MessageDialog("Host to LAN", MultiplayerSession.Status, "OK", null, null));
++		}
++	}
++
++
+ 	private IEnumerable<ActiveExternalContentInfo> GetRateableItems()
+ 	{
+ 		if (GameManager.Project == null || UserManager.ActiveUser == null)

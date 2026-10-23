@@ -1,0 +1,10 @@
+--- a/src/Survivalcraft/Game/ComponentPlayer.cs
++++ src/Survivalcraft/Game/ComponentPlayer.cs
+@@ -70,6 +70,7 @@
+ 
+ 	public void Update(float dt)
+ 	{
++		if (PlayerData.IsRemote) return;
+ 		PlayerInput playerInput = ComponentInput.PlayerInput;
+ 		if (ComponentInput.IsControlledByTouch && m_aim.HasValue)
+ 		{
