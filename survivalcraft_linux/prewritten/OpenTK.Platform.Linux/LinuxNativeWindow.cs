@@ -59,6 +59,7 @@ namespace OpenTK.Platform.Linux
             X11.XStoreName(display, window, title);
             X11.XMapWindow(display, window);
             LinuxInput.SetWindow(display, window);
+            LinuxInput.OnKeyPress += text => KeyPress?.Invoke(this, new KeyPressEventArgs(text[0]));
             X11.XFlush(display);
             _windowInfo = new LinuxWindowInfo(window, display, IntPtr.Zero, visualInfo);
         }
@@ -68,6 +69,7 @@ namespace OpenTK.Platform.Linux
         public void ProcessEvents()
         {
             IntPtr display = _windowInfo.DisplayHandle;
+            IntPtr window = _windowInfo.WindowHandle;
             while (X11.XPending(display) > 0)
             {
                 X11.XNextEvent(display, _eventBuffer);
@@ -80,7 +82,7 @@ namespace OpenTK.Platform.Linux
                         _focused = true;
                         FocusedChanged?.Invoke(this, EventArgs.Empty);
                     }
-                    X11.XSetInputFocus(display, _windowInfo.WindowHandle, 2 /* RevertToParent */, 0);
+                    X11.XSetInputFocus(display, window, 2 /* RevertToParent */, 0);
                     X11.XFlush(display);
                 }
                 else if (type == X11.FocusIn || type == X11.FocusOut)
@@ -105,7 +107,7 @@ namespace OpenTK.Platform.Linux
                     if (resized) Resize?.Invoke(this, EventArgs.Empty);
                     else if (moved) Move?.Invoke(this, EventArgs.Empty);
                 }
-                LinuxInput.ProcessEvent(type, _eventBuffer);
+                LinuxInput.ProcessEvent(type, _eventBuffer, display, window);
             }
         }
         public void Close() => DestroyWindow(); public Point PointToClient(Point point) => point; public Point PointToScreen(Point point) => point;

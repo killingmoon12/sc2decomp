@@ -20,14 +20,25 @@ namespace OpenTK.Platform.Linux
         private static IntPtr _blankCursor;
         private static bool _captured;
 
-        public static void ProcessEvent(int type, IntPtr ev)
+        public static void ProcessEvent(int type, IntPtr ev, IntPtr display, IntPtr window)
         {
             switch (type)
             {
                 case X11.KeyPress:
                 {
+                    X11.XKeyEvent ke = Marshal.PtrToStructure<X11.XKeyEvent>(ev);
                     Key key = TranslateKey(X11.XLookupKeysym(ev, 0));
                     if (key != Key.Unknown) KeysDown[(int)key] = true;
+                    
+                    // Extract character for text input
+                    byte[] buffer = new byte[32];
+                    int len = X11.XLookupString(ev, buffer, buffer.Length, IntPtr.Zero, IntPtr.Zero);
+                    if (len > 0)
+                    {
+                        string text = System.Text.Encoding.UTF8.GetString(buffer, 0, len);
+                        OnKeyPress?.Invoke(text);
+                    }
+                    
                     Connected = true;
                     break;
                 }
@@ -76,6 +87,8 @@ namespace OpenTK.Platform.Linux
                 }
             }
         }
+
+        public static event Action<string> OnKeyPress;
 
         public static void SetMousePosition(double x, double y)
         {

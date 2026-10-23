@@ -64,7 +64,16 @@ public static class Window
 		View.Run();
 	}
 
-	private static void OnLoad(object sender, EventArgs e) { InitializeAll(); Created?.Invoke(); m_state = State.Active; Activated?.Invoke(); }
+	private static void OnLoad(object sender, EventArgs e)
+    {
+        InitializeAll();
+        Created?.Invoke();
+        m_state = State.Active;
+        Activated?.Invoke();
+        
+        // Subscribe to key press events for text input
+        View.KeyPress += (s, args) => Keyboard.HandleKeyPress(args.KeyChar);
+    }
 	private static void OnResize(object sender, EventArgs e) { Display.Resize(); Resized?.Invoke(); }
 	private static void OnRenderFrame(object sender, FrameEventArgs e) {
 		if (m_state != State.Active) return;

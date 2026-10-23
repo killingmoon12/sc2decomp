@@ -141,13 +141,13 @@ public static class Keyboard
 		return false;
 	}
 
-	public static void ShowKeyboard(string title, string description, string defaultText, bool passwordMode, Action<string> enter, Action cancel) {
+	public static void ShowKeyboard(string title, string description, string defaultText, bool passwordMode, Action<string> enter, Action cancel)
+	{
 		if (title == null) throw new ArgumentNullException(nameof(title));
 		if (description == null) throw new ArgumentNullException(nameof(description));
 		if (defaultText == null) throw new ArgumentNullException(nameof(defaultText));
-		if (IsKeyboardVisible) return;
-		Clear(); Touch.Clear(); Mouse.Clear();
-		IsKeyboardVisible = true;
+		// Desktop: no on-screen keyboard; text input works via LastChar/LastKey
+		// Do not set IsKeyboardVisible = true, as that blocks character input
 	}
 
 	public static void Clear() {

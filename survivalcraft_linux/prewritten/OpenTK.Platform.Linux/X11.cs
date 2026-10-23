@@ -130,6 +130,7 @@ namespace OpenTK.Platform.Linux
         [DllImport(Lib)] public static extern int XNextEvent(IntPtr display, IntPtr event_return);
         [DllImport(Lib)] public static extern int XMoveResizeWindow(IntPtr display, IntPtr window, int x, int y, int width, int height);
         [DllImport(Lib)] public static extern ulong XLookupKeysym(IntPtr key_event, int index);
+        [DllImport(Lib)] public static extern int XLookupString(IntPtr key_event, byte[] buffer_return, int bytes_buffer, IntPtr keysym_return, IntPtr status_in_out);
         [DllImport(Lib)] public static extern int XSetInputFocus(IntPtr display, IntPtr window, int revert_to, ulong time);
         [DllImport(Lib)] public static extern int XWarpPointer(IntPtr display, IntPtr src_w, IntPtr dest_w, int src_x, int src_y, int src_width, int src_height, int dest_x, int dest_y);
         [DllImport(Lib)] public static extern IntPtr XCreateBitmapFromData(IntPtr display, IntPtr drawable, byte[] data, int width, int height);
