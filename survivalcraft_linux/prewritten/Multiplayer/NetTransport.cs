@@ -185,6 +185,7 @@ namespace Multiplayer
 					{
 						Channel = NetChannel.TcpControl,
 						Type = (NetMessageType)frame[0],
+						RemoteEndPoint = m_client.Client.RemoteEndPoint as IPEndPoint,
 					};
 					pkt.Payload = new byte[total - 1];
 					Buffer.BlockCopy(frame, 1, pkt.Payload, 0, total - 1);

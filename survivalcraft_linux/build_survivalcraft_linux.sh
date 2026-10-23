@@ -102,11 +102,22 @@ cp "$PREWRITTEN_DIR/Engine/Utilities.cs" "$SRC_DIR/Engine/Engine/Utilities.cs"
 cp "$PREWRITTEN_DIR/OpenTK.Platform/Factory.cs"             "$SRC_DIR/OpenTK-1.0/OpenTK.Platform/Factory.cs"
 cp "$PREWRITTEN_DIR/OpenTK.Input/Mouse.cs"                  "$SRC_DIR/OpenTK-1.0/OpenTK.Input/Mouse.cs"
 cp "$PREWRITTEN_DIR/OpenTK.Input/IMouseCursorController.cs" "$SRC_DIR/OpenTK-1.0/OpenTK.Input/IMouseCursorController.cs"
+# Multiplayer
+mkdir -p "$SRC_DIR/Survivalcraft/Game/Multiplayer"
+cp "$PREWRITTEN_DIR/Multiplayer/MultiplayerSession.cs" "$SRC_DIR/Survivalcraft/Game/Multiplayer/MultiplayerSession.cs"
+cp "$PREWRITTEN_DIR/Multiplayer/NetTransport.cs"       "$SRC_DIR/Survivalcraft/Game/Multiplayer/NetTransport.cs"
+cp "$PREWRITTEN_DIR/Multiplayer/MultiplayerScreen.cs"  "$SRC_DIR/Survivalcraft/Game/Multiplayer/MultiplayerScreen.cs"
+# ComponentGui patch for remote players
+cp "$PREWRITTEN_DIR/Survivalcraft/Game/ComponentGui.cs" "$SRC_DIR/Survivalcraft/Game/ComponentGui.cs"
 
 # ---------------------------------------------------------------------------
 # Project files (patches don't apply well due to path differences)
 # ---------------------------------------------------------------------------
 step "Fixing project files"
+
+# Remove root Multiplayer folder (from decompiled source) to avoid duplicate compilation
+# The correct Multiplayer files are in Game/Multiplayer/ from prewritten/
+rm -rf "$SRC_DIR/Survivalcraft/Multiplayer"
 
 cat > "$SRC_DIR/OpenTK-1.0/OpenTK-1.0.csproj" << 'CSPROJ_EOF'
 <Project Sdk="Microsoft.NET.Sdk">

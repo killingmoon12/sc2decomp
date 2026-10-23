@@ -251,23 +251,75 @@ namespace Multiplayer
 					SpawnPosition = spawnPosition,
 				};
 				players.AddPlayerData(playerData);
+				// Ensure unique PlayerIndex by using a high value that won't conflict with local players (0-7)
+				// Must be set AFTER AddPlayerData which assigns m_nextPlayerIndex++
+				playerData.PlayerIndex = 100 + clientId;
 				m_remotePlayers[clientId] = playerData;
 				var overrides = new ValuesDictionary
 				{
 					{ "Player", new ValuesDictionary { { "PlayerIndex", playerData.PlayerIndex } } },
 					{ "Intro", new ValuesDictionary { { "PlayIntro", false } } },
 				};
-				var entity = DatabaseManager.CreateEntity(project, playerData.GetEntityTemplateName(), overrides, throwIfNotFound: true);
+				string templateName = playerData.GetEntityTemplateName();
+				var template = DatabaseManager.FindEntityValuesDictionary(templateName, throwIfNotFound: false);
+				if (template == null)
+				{
+					Log.Error("[Multiplayer] Entity template '{0}' not found!", templateName);
+					return;
+				}
+
+				// Apply PlayerIndex override to template BEFORE entity creation
+				// ComponentPlayer.Load reads PlayerIndex from template during entity creation
+				var templateCopy = new ValuesDictionary();
+				foreach (var kvp in template)
+				{
+					if (kvp.Value is ValuesDictionary componentDict)
+					{
+						// Copy component dictionary and its DatabaseObject
+						var componentCopy = new ValuesDictionary();
+						foreach (var ck in componentDict)
+						{
+							componentCopy.SetValue(ck.Key, ck.Value);
+						}
+						componentCopy.DatabaseObject = componentDict.DatabaseObject;
+						templateCopy.SetValue(kvp.Key, componentCopy);
+					}
+					else
+					{
+						templateCopy.SetValue(kvp.Key, kvp.Value);
+					}
+				}
+				// IMPORTANT: Copy the DatabaseObject from the original template
+				templateCopy.DatabaseObject = template.DatabaseObject;
+				
+				// Set the correct PlayerIndex in the template copy
+				var playerComponent = templateCopy.Values.OfType<ValuesDictionary>().FirstOrDefault(v => v.GetValue<string>("Class", "").Contains("ComponentPlayer", StringComparison.OrdinalIgnoreCase));
+				if (playerComponent != null)
+				{
+					playerComponent.SetValue("PlayerIndex", playerData.PlayerIndex);
+				}
+
+				// Use original template (with ComponentGui) - the patch in ComponentGui.Load()
+				// handles remote players by skipping GUI initialization
+				var entity = project.CreateEntity(templateCopy);
 				if (entity != null)
 				{
+					// Apply remaining overrides after entity creation
+					foreach (var kvp in overrides)
+					{
+						if (kvp.Key != "Player") // PlayerIndex already set in template
+						{
+							entity.ValuesDictionary.SetValue(kvp.Key, kvp.Value);
+						}
+					}
 					var body = entity.FindComponent<ComponentBody>(throwOnError: true);
 					body.Position = spawnPosition;
 					body.Rotation = Quaternion.Identity;
 					project.AddEntity(entity);
 				}
-				Log.Information("[Multiplayer] spawned remote player {0} (net {1})", playerData.Name, clientId);
+				Log.Information("[Multiplayer] spawned remote player {0} (net {1}) with PlayerIndex {2}", playerData.Name, clientId, playerData.PlayerIndex);
 			}
-			catch (Exception ex) { Log.Warning("[Multiplayer] spawn remote player failed: " + ex.Message); }
+			catch (Exception ex) { Log.Error("[Multiplayer] spawn remote player failed: {0}", ex.ToString()); }
 		}
 
 		internal static void RemoveRemotePlayer(int clientId)
@@ -360,8 +412,13 @@ namespace Multiplayer
 
 			private void OnTcpMessage(NetPacket pkt)
 			{
+				Log.Information("[Multiplayer] Server received TCP message from {0}: Type={1}, PayloadLen={2}", pkt.RemoteEndPoint, pkt.Type, pkt.Payload?.Length ?? 0);
 				Connection conn = FindConnectionByTcp(pkt);
-				if (conn == null) return;
+				if (conn == null)
+				{
+					Log.Warning("[Multiplayer] No connection found for {0}", pkt.RemoteEndPoint);
+					return;
+				}
 				conn.LastPacket = DateTime.UtcNow;
 				switch (pkt.Type)
 				{
@@ -411,28 +468,40 @@ namespace Multiplayer
 
 			private void HandleHello(Connection conn, byte[] payload)
 			{
-				string name = Encoding.UTF8.GetString(payload ?? Array.Empty<byte>());
-				if (string.IsNullOrEmpty(name)) name = "Player";
-				conn.Name = name.Length > 32 ? name.Substring(0, 32) : name;
-				conn.Ready = true;
-				conn.RemoteEndPoint = conn.Tcp.RemoteEndPoint;
-				// Assign UDP endpoint from the first game packet; for now bind to TCP peer address.
-				SendHelloAck(conn);
-				SpawnRemotePlayer(conn.ClientId, conn.Name, Vector3.Zero);
-				SendWorldSnapshot(conn);
-				BroadcastPlayerJoined(conn);
-				SendPlayerListTo(conn);
-				SetStatus($"Hosting on LAN port {m_port}. Clients: {ReadyClientCount()}.");
-				MultiplayerSession.OnRemotePlayerJoined(conn.ClientId, conn.Name);
-				Log.Information("[Multiplayer] {0} ({1}) joined", conn.Name, conn.ClientId);
+				try
+				{
+					using var ms = new MemoryStream(payload);
+					using var r = new BinaryReader(ms);
+					string name = r.ReadString();
+					int clientUdpPort = r.ReadInt32();
+					if (string.IsNullOrEmpty(name)) name = "Player";
+					conn.Name = name.Length > 32 ? name.Substring(0, 32) : name;
+					conn.Ready = true;
+					// Use client's IP from TCP connection, but client's UDP port
+					conn.RemoteEndPoint = new IPEndPoint(conn.Tcp.RemoteEndPoint.Address, clientUdpPort);
+					SendHelloAck(conn, clientUdpPort);
+					SpawnRemotePlayer(conn.ClientId, conn.Name, Vector3.Zero);
+					SendWorldSnapshot(conn);
+					BroadcastPlayerJoined(conn);
+					SendPlayerListTo(conn);
+					SetStatus($"Hosting on LAN port {m_port}. Clients: {ReadyClientCount()}.");
+					MultiplayerSession.OnRemotePlayerJoined(conn.ClientId, conn.Name);
+					Log.Information("[Multiplayer] {0} ({1}) joined, UDP port {2}", conn.Name, conn.ClientId, clientUdpPort);
+				}
+				catch (Exception ex)
+				{
+					Log.Warning("[Multiplayer] HandleHello failed: " + ex.Message);
+					conn.Tcp?.Send(NetMessageType.JoinRejected, Encoding.UTF8.GetBytes("Server error: " + ex.Message));
+					RemoveConnection(conn);
+				}
 			}
 
-			private void SendHelloAck(Connection conn)
+			private void SendHelloAck(Connection conn, int clientUdpPort)
 			{
 				using var ms = new MemoryStream();
 				using var w = new BinaryWriter(ms);
 				w.Write(conn.ClientId);
-				w.Write(DefaultPort);
+				w.Write(DefaultPort); // server's UDP port for client->server traffic
 				conn.Tcp.Send(NetMessageType.HelloAck, ms.ToArray());
 			}
 
@@ -725,7 +794,7 @@ namespace Multiplayer
 					m_udp = new UdpTransport(0);
 					m_udp.StartReceive(OnUdpPacket);
 					m_serverEndPoint = new IPEndPoint(ResolveHost(m_host), m_port);
-					SendHello(Environment.UserName);
+					SendHello(Environment.UserName, m_udp.LocalPort);
 					m_connected = true;
 					Log.Information("[Multiplayer] client connected to {0}:{1}", m_host, m_port);
 					return true;
@@ -746,6 +815,7 @@ namespace Multiplayer
 
 			private void OnTcpMessage(NetPacket pkt)
 			{
+				Log.Information("[Multiplayer] Client received TCP message: Type={0}, PayloadLen={1}", pkt.Type, pkt.Payload?.Length ?? 0);
 				switch (pkt.Type)
 				{
 					case NetMessageType.HelloAck: HandleHelloAck(pkt.Payload); break;
@@ -769,17 +839,30 @@ namespace Multiplayer
 
 			private void HandleHelloAck(byte[] payload)
 			{
-				using var ms = new MemoryStream(payload);
-				using var r = new BinaryReader(ms);
-				m_clientId = r.ReadInt32();
-				int udpPort = r.ReadInt32();
-				m_serverEndPoint = new IPEndPoint(m_serverEndPoint.Address, udpPort);
-				SetStatus("Connected to host.");
+				try
+				{
+					using var ms = new MemoryStream(payload);
+					using var r = new BinaryReader(ms);
+					m_clientId = r.ReadInt32();
+					int udpPort = r.ReadInt32();
+					m_serverEndPoint = new IPEndPoint(m_serverEndPoint.Address, udpPort);
+					SetStatus("Connected to host.");
+					Log.Information("[Multiplayer] HelloAck received: clientId={0}, serverUdpPort={1}", m_clientId, udpPort);
+				}
+				catch (Exception ex)
+				{
+					Log.Warning("[Multiplayer] HandleHelloAck failed: " + ex.Message);
+					StopSession();
+				}
 			}
 
-			private void SendHello(string name)
+			private void SendHello(string name, int udpPort)
 			{
-				m_tcp?.Send(NetMessageType.Hello, Encoding.UTF8.GetBytes(name ?? string.Empty));
+				using var ms = new MemoryStream();
+				using var w = new BinaryWriter(ms);
+				w.Write(name ?? string.Empty);
+				w.Write(udpPort);
+				m_tcp?.Send(NetMessageType.Hello, ms.ToArray());
 			}
 
 			private void SetStatus(string status)
@@ -799,15 +882,9 @@ namespace Multiplayer
 			private readonly List<byte> m_snapshotChunks = new List<byte>();
 			private void AppendSnapshotChunk(byte[] payload)
 			{
-				if (payload == null || payload.Length < 5) return;
-				int count = payload[0] | (payload[1] << 8) | (payload[2] << 16) | (payload[3] << 24);
-				// actually chunk layout: [4 bytes count][bytes]
-				// simpler: payload = count(4) + data
-				using var ms = new MemoryStream(payload);
-				using var r = new BinaryReader(ms);
-				int c = r.ReadInt32();
-				byte[] data = r.ReadBytes(c);
-				m_snapshotChunks.AddRange(data);
+				if (payload == null || payload.Length == 0) return;
+				// Server sends raw chunk data without length prefix
+				m_snapshotChunks.AddRange(payload);
 			}
 			private void FinishSnapshot()
 			{
@@ -826,23 +903,43 @@ namespace Multiplayer
 			private void ImportSnapshot(byte[] zip)
 			{
 				string dir = Storage.CombinePaths("data:", "Multiplayer", "JoinedWorld");
-				Storage.DeleteDirectoryRecursive(dir);
-				Storage.CreateDirectory(dir);
-				using var ms = new MemoryStream(zip);
-				using var zipArchive = new ZipArchive(ms, ZipArchiveMode.Read);
-				foreach (var entry in zipArchive.Entries)
+				Log.Information("[Multiplayer] Importing world snapshot to {0}", dir);
+				try
 				{
-					if (string.IsNullOrEmpty(entry.Name)) continue;
-					string target = Storage.CombinePaths(dir, entry.FullName);
-					string dirName = Path.GetDirectoryName(target);
-					if (!string.IsNullOrEmpty(dirName)) Storage.CreateDirectory(dirName);
-					using var outStream = Storage.OpenFile(target, OpenFileMode.Create);
-					using var inStream = entry.Open();
-					inStream.CopyTo(outStream);
+					// Ensure parent directory exists
+					string parentDir = Path.GetDirectoryName(dir);
+					if (!string.IsNullOrEmpty(parentDir) && !Storage.DirectoryExists(parentDir))
+					{
+						Storage.CreateDirectory(parentDir);
+					}
+					// Only delete if directory exists
+					if (Storage.DirectoryExists(dir))
+					{
+						Storage.DeleteDirectoryRecursive(dir);
+					}
+					Storage.CreateDirectory(dir);
+					using var ms = new MemoryStream(zip);
+					using var zipArchive = new ZipArchive(ms, ZipArchiveMode.Read);
+					foreach (var entry in zipArchive.Entries)
+					{
+						if (string.IsNullOrEmpty(entry.Name)) continue;
+						string target = Storage.CombinePaths(dir, entry.FullName);
+						string dirName = Path.GetDirectoryName(target);
+						if (!string.IsNullOrEmpty(dirName)) Storage.CreateDirectory(dirName);
+						using var outStream = Storage.OpenFile(target, OpenFileMode.Create);
+						using var inStream = entry.Open();
+						inStream.CopyTo(outStream);
+					}
+				}
+				catch (Exception ex)
+				{
+					Log.Error("[Multiplayer] Failed to import snapshot: {0}", ex.ToString());
+					throw;
 				}
 				var worldInfo = WorldsManager.GetWorldInfo(dir);
 				if (worldInfo == null) { SetStatus("Received world is invalid."); return; }
 				MultiplayerSession.IsJoinedWorld = true;
+				Log.Information("[Multiplayer] World snapshot imported successfully, switching to GameLoading");
 				Dispatcher.Dispatch(() =>
 				{
 					try
