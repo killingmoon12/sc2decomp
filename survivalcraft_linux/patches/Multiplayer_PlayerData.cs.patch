@@ -1,0 +1,44 @@
+--- a/src/Survivalcraft/Game/PlayerData.cs
++++ src/Survivalcraft/Game/PlayerData.cs
+@@ -44,6 +44,9 @@
+ 
+ 	public int PlayerIndex { get; set; }
+ 
++	/// <summary>True for a player controlled by another machine.</summary>
++	public bool IsRemote { get; set; }
++
+ 	public SubsystemGameWidgets SubsystemGameWidgets { get; private set; }
+ 
+ 	public SubsystemPlayers SubsystemPlayers { get; private set; }
+@@ -54,6 +57,7 @@
+ 	{
+ 		get
+ 		{
++			if (IsRemote) return null;
+ 			if (m_gameWidget == null)
+ 			{
+ 				foreach (GameWidget gameWidget in SubsystemGameWidgets.GameWidgets)
+@@ -372,6 +376,7 @@
+ 
+ 	public void Update()
+ 	{
++		if (IsRemote) return;
+ 		m_stateMachine.Update();
+ 	}
+ 
+@@ -386,6 +391,7 @@
+ 		Level = valuesDictionary.GetValue("Level", 1f);
+ 		CharacterSkinName = valuesDictionary.GetValue("CharacterSkinName", CharacterSkinsManager.CharacterSkinsNames[0]);
+ 		InputDevice = valuesDictionary.GetValue("InputDevice", InputDevice);
++		IsRemote = valuesDictionary.GetValue("IsRemote", false);
+ 	}
+ 
+ 	public void Save(ValuesDictionary valuesDictionary)
+@@ -399,6 +405,7 @@
+ 		valuesDictionary.SetValue("Level", Level);
+ 		valuesDictionary.SetValue("CharacterSkinName", CharacterSkinName);
+ 		valuesDictionary.SetValue("InputDevice", InputDevice);
++		valuesDictionary.SetValue("IsRemote", IsRemote);
+ 	}
+ 
+ 	public void OnEntityAdded(Entity entity)

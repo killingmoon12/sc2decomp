@@ -112,6 +112,31 @@ screen.
 | `Survivalcraft_WebManager.cs` | Ping via `System.Net.NetworkInformation` |
 | `Survivalcraft_WebBrowserManager.cs` | `Process.Start` with `UseShellExecute` |
 | `Survivalcraft_*ExternalContentProvider.cs` | Linux provider under `~/SurvivalcraftExternal` |
+| `Multiplayer_PlayScreen.cs` | "Multiplayer" button + join screen UI on world selection |
+| `Multiplayer_GameMenuDialog.cs` | "Host to LAN"/"Stop Hosting" + "Connected Players" in-game menu |
+| `Multiplayer_PlayerData.cs` | `IsRemote` flag; remote players skip local input/GameWidget |
+| `Multiplayer_SubsystemPlayers.cs` | Raise local player cap to 8; remote players exempt |
+| `Multiplayer_ComponentPlayer.cs` | Skip local input simulation for remote players |
+| `Multiplayer_GameManager.cs` | Tick network session each frame; stop on world dispose |
+
+## Multiplayer
+
+The multiplayer stage (`patches/Multiplayer_*.patch` + `prewritten/Multiplayer/`) adds LAN multiplayer modelled on Vintage Story:
+
+* **Host-authoritative** — the host simulates the world; clients send input/player state and receive the host's broadcast state.
+* **UDP game channel** — unreliable, latest-wins player-state broadcasts (20 Hz) and ping/pong.
+* **TCP control channel** — reliable handshake, chat, block-change requests, and chunked world-snapshot transfer on join.
+* **LAN discovery** — UDP broadcast probe (`SC2MP!`) to find hosts on the local network.
+* **Connection flow** — client connects → host sends world snapshot → client loads the host's world → players spawn and sync.
+
+### How to use
+
+1. Start a world in single-player, open the "..." menu, and choose **"Host to LAN"** (port `55551` by default).
+2. On another machine, open the world-selection screen, click **"Multiplayer"**, enter the host IP/port (or click **"Find LAN Games"**), and click **Connect**.
+3. The host's world is transferred to the client, which then loads it and joins as a remote player.
+4. Use **"Connected Players"** in the "..." menu to see who is joined; **"Stop Hosting"** ends the session.
+
+All multiplayer code lives in `prewritten/Multiplayer/` (new files, survive `src/` regeneration) and `patches/Multiplayer_*.patch` (revertable with `patch -R`).
 
 ## Requirements
 

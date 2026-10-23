@@ -1,0 +1,26 @@
+--- a/src/Survivalcraft/Game/GameManager.cs
++++ src/Survivalcraft/Game/GameManager.cs
+@@ -6,6 +6,7 @@
+ using Engine;
+ using GameEntitySystem;
+ using TemplatesDatabase;
++using Multiplayer;
+ using XmlUtilities;
+ 
+ namespace Game;
+@@ -109,6 +110,7 @@
+ 		if (m_project != null)
+ 		{
+ 			m_subsystemUpdate.Update();
++			MultiplayerSession.Tick(Time.FrameDuration);
+ 		}
+ 	}
+ 
+@@ -116,6 +118,7 @@
+ 	{
+ 		if (m_project != null)
+ 		{
++			MultiplayerSession.Stop();
+ 			ProjectDisposed?.Invoke(m_project);
+ 			m_project.Dispose();
+ 			m_project = null;

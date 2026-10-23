@@ -62,6 +62,15 @@ mkdir -p "$SRC_DIR/OpenTK-1.0/OpenTK.Platform.Linux"
 cp "$PREWRITTEN_DIR/OpenTK.Platform.Linux/"*.cs "$SRC_DIR/OpenTK-1.0/OpenTK.Platform.Linux/"
 
 # ---------------------------------------------------------------------------
+# Multiplayer networking library + UI (new files, not in the decompile)
+# Placed under src/Survivalcraft/Multiplayer so the Survivalcraft project's
+# **/*.cs glob picks them up (same assembly as the game code).
+# ---------------------------------------------------------------------------
+step "Adding multiplayer library"
+mkdir -p "$SRC_DIR/Survivalcraft/Multiplayer"
+cp "$PREWRITTEN_DIR/Multiplayer/"*.cs "$SRC_DIR/Survivalcraft/Multiplayer/"
+
+# ---------------------------------------------------------------------------
 # Patches
 # ---------------------------------------------------------------------------
 # Every patch here must apply cleanly to the freshly decompiled tree; a patch
