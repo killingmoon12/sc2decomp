@@ -1,0 +1,15 @@
+--- a/Survivalcraft/Game/SubsystemUpdate.cs
++++ b/Survivalcraft/Game/SubsystemUpdate.cs
+@@ -83,6 +83,12 @@
+ 			float gameTimeDelta = m_subsystemTime.GameTimeDelta;
+ 			foreach (IUpdateable sortedUpdateable in m_sortedUpdateables)
+ 			{
++				// Multiplayer clients are replicas: world simulation is owned
++				// by the host and only visual/UI updateables run locally.
++				if (MultiplayerManager.SkipUpdate(sortedUpdateable))
++				{
++					continue;
++				}
+ 				try
+ 				{
+ 					sortedUpdateable.Update(gameTimeDelta);

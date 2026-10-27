@@ -1,0 +1,21 @@
+--- a/Survivalcraft/Game/ComponentLocomotion.cs
++++ b/Survivalcraft/Game/ComponentLocomotion.cs
+@@ -107,6 +107,18 @@
+ 		}
+ 	}
+ 
++	/// <summary>Adds a look delta (used for client side look prediction).</summary>
++	public void AddLookAngles(Vector2 delta)
++	{
++		LookAngles = LookAngles + delta;
++	}
++
++	/// <summary>Overwrites the look angles from a replicated entity state.</summary>
++	public void SetLookAngles(Vector2 value)
++	{
++		LookAngles = value;
++	}
++
+ 	public int? LadderValue { get; private set; }
+ 
+ 	public Vector2? WalkOrder

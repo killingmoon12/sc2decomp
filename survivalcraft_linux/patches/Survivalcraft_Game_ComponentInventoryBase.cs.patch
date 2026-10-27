@@ -1,0 +1,28 @@
+--- a/Survivalcraft/Game/ComponentInventoryBase.cs
++++ b/Survivalcraft/Game/ComponentInventoryBase.cs
+@@ -146,6 +146,25 @@
+ 		}
+ 	}
+ 
++	/// <summary>Sets a slot directly from a replicated player state.</summary>
++	public void SetSlotNet(int slotIndex, int value, int count)
++	{
++		if (slotIndex < 0 || slotIndex >= m_slots.Count)
++		{
++			return;
++		}
++		if (value == 0 || count <= 0)
++		{
++			m_slots[slotIndex].Value = 0;
++			m_slots[slotIndex].Count = 0;
++		}
++		else
++		{
++			m_slots[slotIndex].Value = value;
++			m_slots[slotIndex].Count = count;
++		}
++	}
++
+ 	public virtual int GetSlotValue(int slotIndex)
+ 	{
+ 		if (slotIndex >= 0 && slotIndex < m_slots.Count)

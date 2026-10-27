@@ -26,6 +26,12 @@ In the `build` directory run:
 dotnet Survivalcraft.dll
 ```
 
+## Multiplayer
+The Linux port supports LAN play: open a loaded world to the LAN from the
+in-game menu, and join with the **Join LAN** button on the worlds screen.
+See [`survivalcraft_linux/MULTIPLAYER.md`](survivalcraft_linux/MULTIPLAYER.md)
+for design, protocol, ports, testing and known limitations.
+
 ### Dependencies
 
 .NET SDK 9.0+ bash, rsync, patch, python3 ILSpy (for decompilation via decompile_survivalcraft.sh) SDL2 (libSDL2-2.0.so.0) libGLESv2.so.2 (Mesa) libopenal.so.1 (OpenAL Soft)

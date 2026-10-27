@@ -1,5 +1,5 @@
---- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/Survivalcraft/Game/ScreenCaptureManager.cs	2026-10-19 15:19:41.749997018 +0300
-+++ src/Survivalcraft/Game/ScreenCaptureManager.cs	2026-10-19 16:22:12.070860679 +0300
+--- a/Survivalcraft/Game/ScreenCaptureManager.cs
++++ b/Survivalcraft/Game/ScreenCaptureManager.cs
 @@ -1,66 +1,42 @@
  using System;
  using System.Collections.Generic;

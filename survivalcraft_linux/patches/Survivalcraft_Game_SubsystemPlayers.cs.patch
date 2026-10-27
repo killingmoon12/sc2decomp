@@ -1,0 +1,93 @@
+--- a/Survivalcraft/Game/SubsystemPlayers.cs
++++ b/Survivalcraft/Game/SubsystemPlayers.cs
+@@ -1,6 +1,7 @@
+ using System;
+ using System.Collections.Generic;
+ using System.Globalization;
++using System.Linq;
+ using Engine;
+ using GameEntitySystem;
+ using TemplatesDatabase;
+@@ -17,7 +18,7 @@
+ 
+ 	private int m_nextPlayerIndex;
+ 
+-	public const int MaxPlayers = 4;
++	public const int MaxPlayers = 8;
+ 
+ 	public ReadOnlyList<PlayerData> PlayersData => new ReadOnlyList<PlayerData>(m_playersData);
+ 
+@@ -61,7 +62,7 @@
+ 
+ 	public void AddPlayerData(PlayerData playerData)
+ 	{
+-		if (m_playersData.Count >= 4)
++		if (m_playersData.Count >= MaxPlayers)
+ 		{
+ 			throw new InvalidOperationException("Too many players.");
+ 		}
+@@ -74,6 +75,27 @@
+ 		PlayerAdded?.Invoke(playerData);
+ 	}
+ 
++	/// <summary>
++	/// Adds a player with an index chosen by the multiplayer host. Clients use
++	/// this for players that joined after their world snapshot was taken.
++	/// </summary>
++	public PlayerData AddPlayerDataAt(int playerIndex, bool isRemote)
++	{
++		if (m_playersData.Count >= MaxPlayers)
++		{
++			throw new InvalidOperationException("Too many players.");
++		}
++		PlayerData playerData = new PlayerData(Project)
++		{
++			PlayerIndex = playerIndex,
++			IsRemote = isRemote
++		};
++		m_playersData.Add(playerData);
++		m_nextPlayerIndex = MathUtils.Max(m_nextPlayerIndex, playerIndex + 1);
++		PlayerAdded?.Invoke(playerData);
++		return playerData;
++	}
++
+ 	public void RemovePlayerData(PlayerData playerData)
+ 	{
+ 		if (!m_playersData.Contains(playerData))
+@@ -119,8 +141,22 @@
+ 			PlayerData playerData = new PlayerData(Project);
+ 			playerData.Load((ValuesDictionary)item.Value);
+ 			playerData.PlayerIndex = int.Parse(item.Key, CultureInfo.InvariantCulture);
++			// While loading a downloaded world on a client, every player except
++			// the one the host assigned to us is a remote player.
++			playerData.IsRemote = MultiplayerManager.IsJoiningProject && playerData.PlayerIndex != MultiplayerManager.LocalPlayerIndex;
+ 			m_playersData.Add(playerData);
+ 		}
++		if (MultiplayerManager.IsJoiningProject)
++		{
++			// Make the local player the primary one so that the normal desktop
++			// input device assignment and the single game widget keep working.
++			PlayerData playerData2 = m_playersData.FirstOrDefault((PlayerData p) => p.PlayerIndex == MultiplayerManager.LocalPlayerIndex);
++			if (playerData2 != null)
++			{
++				m_playersData.Remove(playerData2);
++				m_playersData.Insert(0, playerData2);
++			}
++		}
+ 	}
+ 
+ 	protected override void Save(ValuesDictionary valuesDictionary)
+@@ -131,6 +167,13 @@
+ 		valuesDictionary.SetValue("Players", valuesDictionary2);
+ 		foreach (PlayerData playersDatum in m_playersData)
+ 		{
++			// Remote avatars are normally not part of the host save. They are
++			// included only while a world snapshot is generated for a joining
++			// client, because that snapshot must contain that client's player.
++			if (playersDatum.IsRemote && !MultiplayerManager.IncludeRemotePlayersInSave)
++			{
++				continue;
++			}
+ 			ValuesDictionary valuesDictionary3 = new ValuesDictionary();
+ 			valuesDictionary2.SetValue(playersDatum.PlayerIndex.ToString(CultureInfo.InvariantCulture), valuesDictionary3);
+ 			playersDatum.Save(valuesDictionary3);

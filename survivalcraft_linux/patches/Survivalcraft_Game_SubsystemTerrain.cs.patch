@@ -1,0 +1,13 @@
+--- a/Survivalcraft/Game/SubsystemTerrain.cs
++++ b/Survivalcraft/Game/SubsystemTerrain.cs
+@@ -272,6 +272,10 @@
+ 				blockBehaviors3[k].OnBlockModified(value, cellValueFast, x, y, z);
+ 			}
+ 		}
++		// Multiplayer: stream this edit to clients (host) or to the host
++		// (client). Re-applied remote edits do not recurse because the manager
++		// suppresses the notification while it applies them.
++		MultiplayerManager.OnCellChanged(x, y, z, value);
+ 	}
+ 
+ 	public void DestroyCell(int toolLevel, int x, int y, int z, int newValue, bool noDrop, bool noParticleSystem)

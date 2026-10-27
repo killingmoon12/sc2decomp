@@ -1,6 +1,8 @@
 # Regenerated on every full run of build_survivalcraft_linux.sh
 survivalcraft_linux/src/
 survivalcraft_linux/build/
+survivalcraft_for_portmaster/src/
+survivalcraft_for_portmaster/build/
 
 # Decompiled tree (output of decompile_survivalcraft.sh)
 survivalcraft_decompiled/

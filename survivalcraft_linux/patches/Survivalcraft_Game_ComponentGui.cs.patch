@@ -1,0 +1,26 @@
+--- a/Survivalcraft/Game/ComponentGui.cs
++++ b/Survivalcraft/Game/ComponentGui.cs
+@@ -210,6 +210,12 @@
+ 
+ 	public void Update(float dt)
+ 	{
++		// Remote players have a detached, invisible GUI. Never process input or
++		// widget state for them.
++		if (MultiplayerManager.IsRemotePlayer(m_componentPlayer.PlayerData))
++		{
++			return;
++		}
+ 		HandleInput();
+ 		UpdateWidgets();
+ 	}
+@@ -279,6 +285,10 @@
+ 
+ 	protected override void OnEntityAdded()
+ 	{
++		if (MultiplayerManager.IsRemotePlayer(m_componentPlayer.PlayerData))
++		{
++			return;
++		}
+ 		ShortInventoryWidget.AssignComponents(m_componentPlayer.ComponentMiner.Inventory);
+ 	}
+ 

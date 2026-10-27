@@ -1,0 +1,24 @@
+--- a/EntitySystem.Android.Net/GameEntitySystem/Entity.cs
++++ b/EntitySystem.Android.Net/GameEntitySystem/Entity.cs
+@@ -191,6 +191,10 @@
+ 
+ 	internal void InternalLoadEntity(ValuesDictionary valuesDictionary, IdToEntityMap idToEntityMap)
+ 	{
++		if (valuesDictionary.ContainsKey("MultiplayerNetId"))
++		{
++			EntityNetRegistry.Register(this, valuesDictionary.GetValue<int>("MultiplayerNetId"));
++		}
+ 		foreach (Component component in m_components)
+ 		{
+ 			try
+@@ -215,6 +219,10 @@
+ 				valuesDictionary.SetValue(component.ValuesDictionary.DatabaseObject.Name, valuesDictionary2);
+ 			}
+ 		}
++		if (EntityNetRegistry.Enabled)
++		{
++			valuesDictionary.SetValue("MultiplayerNetId", EntityNetRegistry.GetOrCreateId(this));
++		}
+ 	}
+ 
+ 	internal void FireEntityAddedEvent()

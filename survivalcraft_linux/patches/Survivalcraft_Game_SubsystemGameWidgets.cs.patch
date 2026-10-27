@@ -1,0 +1,60 @@
+--- a/Survivalcraft/Game/SubsystemGameWidgets.cs
++++ b/Survivalcraft/Game/SubsystemGameWidgets.cs
+@@ -9,7 +9,7 @@
+ 
+ public class SubsystemGameWidgets : Subsystem, IUpdateable
+ {
+-	public const int MaxGameWidgets = 4;
++	public const int MaxGameWidgets = 8;
+ 
+ 	private SubsystemPlayers m_subsystemPlayers;
+ 
+@@ -46,6 +46,12 @@
+ 	{
+ 		foreach (GameWidget gameWidget in GameWidgets)
+ 		{
++			// Remote players have a detached GameWidget that exists only so that
++			// their GUI components can load. It is never drawn or controlled.
++			if (MultiplayerManager.IsRemotePlayer(gameWidget.PlayerData))
++			{
++				continue;
++			}
+ 			gameWidget.ActiveCamera.Update(Time.FrameDuration);
+ 		}
+ 	}
+@@ -85,23 +91,31 @@
+ 	private void AddGameWidgetForPlayer(PlayerData playerData)
+ 	{
+ 		int index = 0;
+-		while (index < 4 && m_gameWidgets.FirstOrDefault((GameWidget v) => v.GameWidgetIndex == index) != null)
++		while (index < MaxGameWidgets && m_gameWidgets.FirstOrDefault((GameWidget v) => v.GameWidgetIndex == index) != null)
+ 		{
+ 			int num = index + 1;
+ 			index = num;
+ 		}
+-		if (index >= 4)
++		if (index >= MaxGameWidgets)
+ 		{
+ 			throw new InvalidOperationException("Too many GameWidgets.");
+ 		}
+ 		GameWidget gameWidget = new GameWidget(playerData, index);
+ 		m_gameWidgets.Add(gameWidget);
+-		GamesWidget.Children.Add(gameWidget);
++		// Only local players get a visible (and input receiving) view. Remote
++		// players use a detached widget so split screen never triggers.
++		if (!MultiplayerManager.IsRemotePlayer(playerData))
++		{
++			GamesWidget.Children.Add(gameWidget);
++		}
+ 	}
+ 
+ 	private void RemoveGameWidget(GameWidget gameWidget)
+ 	{
+ 		m_gameWidgets.Remove(gameWidget);
+-		GamesWidget.Children.Remove(gameWidget);
++		if (gameWidget.ParentWidget != null)
++		{
++			GamesWidget.Children.Remove(gameWidget);
++		}
+ 	}
+ }

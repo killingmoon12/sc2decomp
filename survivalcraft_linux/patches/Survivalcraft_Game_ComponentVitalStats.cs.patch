@@ -1,0 +1,17 @@
+--- a/Survivalcraft/Game/ComponentVitalStats.cs
++++ b/Survivalcraft/Game/ComponentVitalStats.cs
+@@ -69,6 +69,14 @@
+ 
+ 	public float EnvironmentTemperature => m_environmentTemperature;
+ 
++	/// <summary>Applies host-authoritative needs on a replica client.</summary>
++	public void SetNetVitals(float food, float temperature, float wetness)
++	{
++		m_food = MathUtils.Saturate(food);
++		m_temperature = MathUtils.Clamp(temperature, 0f, 24f);
++		m_wetness = MathUtils.Saturate(wetness);
++	}
++
+ 	public float Food
+ 	{
+ 		get

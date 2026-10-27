@@ -1,0 +1,17 @@
+--- a/Survivalcraft/Game/ComponentHealth.cs
++++ b/Survivalcraft/Game/ComponentHealth.cs
+@@ -41,6 +41,14 @@
+ 
+ 	public float HealthChange { get; private set; }
+ 
++	/// <summary>Applies host-authoritative health and air on a replica client.</summary>
++	public void SetNetHealth(float health, float air)
++	{
++		Health = MathUtils.Saturate(health);
++		Air = MathUtils.Clamp(air, 0f, MathUtils.Max(AirCapacity, 0f));
++		m_lastHealth = Health;
++	}
++
+ 	public BreathingMode BreathingMode { get; private set; }
+ 
+ 	public float Air { get; private set; }

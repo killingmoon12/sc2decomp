@@ -88,6 +88,13 @@ cp "$PREWRITTEN_DIR/Engine/Window.cs"    "$SRC_DIR/Engine/Engine/Window.cs"
 cp "$PREWRITTEN_DIR/Engine/Storage.cs"   "$SRC_DIR/Engine/Engine/Storage.cs"
 cp "$PREWRITTEN_DIR/Engine/Utilities.cs" "$SRC_DIR/Engine/Engine/Utilities.cs"
 
+# Multiplayer / entity-system additions
+cp "$PREWRITTEN_DIR/EntitySystem/EntityNetRegistry.cs" "$SRC_DIR/EntitySystem.Android.Net/GameEntitySystem/EntityNetRegistry.cs"
+mkdir -p "$SRC_DIR/Survivalcraft/Game"
+for f in "$PREWRITTEN_DIR"/Multiplayer/*.cs; do
+    cp "$f" "$SRC_DIR/Survivalcraft/Game/$(basename "$f")"
+done
+
 # ---------------------------------------------------------------------------
 # Project files (patches don't apply well due to path differences)
 # ---------------------------------------------------------------------------

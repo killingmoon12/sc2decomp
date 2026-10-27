@@ -1,0 +1,45 @@
+--- a/Survivalcraft/Game/GameMenuDialog.cs
++++ b/Survivalcraft/Game/GameMenuDialog.cs
+@@ -66,6 +66,7 @@
+ 			Color = white
+ 		});
+ 		AddStat(stackPanelWidget, "Game Mode", subsystemGameInfo.WorldSettings.GameMode.ToString() + ", " + subsystemGameInfo.WorldSettings.EnvironmentBehaviorMode);
++		AddStat(stackPanelWidget, "Multiplayer", MultiplayerManager.DescribeStatus());
+ 		AddStat(stackPanelWidget, "Terrain Type", StringsManager.GetString("TerrainGenerationMode." + subsystemGameInfo.WorldSettings.TerrainGenerationMode.ToString() + ".Name"));
+ 		string seed = subsystemGameInfo.WorldSettings.Seed;
+ 		AddStat(stackPanelWidget, "World Seed", (!string.IsNullOrEmpty(seed)) ? seed : "(none)");
+@@ -253,6 +254,34 @@
+ 					}));
+ 				}));
+ 			}
++			if (!MultiplayerManager.IsActive)
++			{
++				list.Add(new Tuple<string, Action>("Open World To LAN", () =>
++				{
++					if (MultiplayerManager.IsClientReplica)
++					{
++						DialogsManager.ShowDialog(ParentWidget, new MessageDialog("Multiplayer", "You are playing on a host world and cannot host it yourself.", "OK", null, null));
++						return;
++					}
++					string error = MultiplayerManager.StartHosting();
++					DialogsManager.ShowDialog(ParentWidget, new MessageDialog(error == null ? "World opened to LAN" : "Could not open world", error ?? MultiplayerManager.DescribeStatus(), "OK", null, null));
++				}));
++			}
++			else if (MultiplayerManager.IsHost)
++			{
++				list.Add(new Tuple<string, Action>("Stop Hosting LAN", () =>
++				{
++					MultiplayerManager.StopHosting();
++					DialogsManager.ShowDialog(ParentWidget, new MessageDialog("Multiplayer", "The world is no longer open to the LAN.", "OK", null, null));
++				}));
++			}
++			else if (MultiplayerManager.IsClient)
++			{
++				list.Add(new Tuple<string, Action>("LAN Status", () =>
++				{
++					DialogsManager.ShowDialog(ParentWidget, new MessageDialog("Multiplayer", MultiplayerManager.DescribeStatus(), "OK", null, null));
++				}));
++			}
+ 			list.Add(new Tuple<string, Action>("Edit Players", () =>
+ 			{
+ 				ScreensManager.SwitchScreen("Players", m_componentPlayer.Project.FindSubsystem<SubsystemPlayers>(throwOnError: true));

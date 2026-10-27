@@ -1,0 +1,13 @@
+--- a/Survivalcraft/Game/ScreensManager.cs
++++ b/Survivalcraft/Game/ScreensManager.cs
+@@ -180,6 +180,10 @@
+ 		{
+ 			AddScreen("WorldOptions", new WorldOptionsScreen());
+ 		});
++		LoadingManager.QueueItem("Initialize MultiplayerScreen", () =>
++		{
++			AddScreen("Multiplayer", new MultiplayerScreen());
++		});
+ 		LoadingManager.QueueItem("Initialize GameLoadingScreen", () =>
+ 		{
+ 			AddScreen("GameLoading", new GameLoadingScreen());

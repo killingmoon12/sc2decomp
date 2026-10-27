@@ -1,5 +1,5 @@
---- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/Survivalcraft/Game/WebBrowserManager.cs	2026-10-19 15:19:42.704007026 +0300
-+++ src/Survivalcraft/Game/WebBrowserManager.cs	2026-10-19 16:15:22.752371628 +0300
+--- a/Survivalcraft/Game/WebBrowserManager.cs
++++ b/Survivalcraft/Game/WebBrowserManager.cs
 @@ -1,6 +1,5 @@
  using System;
 -using Android.Content;

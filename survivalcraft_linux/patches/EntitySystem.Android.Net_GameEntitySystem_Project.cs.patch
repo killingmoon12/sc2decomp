@@ -1,0 +1,22 @@
+--- a/EntitySystem.Android.Net/GameEntitySystem/Project.cs
++++ b/EntitySystem.Android.Net/GameEntitySystem/Project.cs
+@@ -186,6 +186,7 @@
+ 			m_entities.Remove(entity);
+ 			entity.m_isAddedToProject = false;
+ 			FireEntityRemovedEvents(entity);
++			EntityNetRegistry.Unregister(entity);
+ 			if (disposeEntity)
+ 			{
+ 				entity.Dispose();
+@@ -241,6 +242,11 @@
+ 
+ 	public EntityDataList SaveEntities(IEnumerable<Entity> entities)
+ 	{
++		Func<Entity, bool> saveFilter = EntityNetRegistry.SaveFilter;
++		if (saveFilter != null)
++		{
++			entities = entities.Where((Entity e) => saveFilter(e));
++		}
+ 		Dictionary<Entity, bool> dictionary = DetermineNotOwnedEntities(entities);
+ 		int num = 1;
+ 		Dictionary<Entity, int> dictionary2 = new Dictionary<Entity, int>();

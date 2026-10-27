@@ -1,0 +1,17 @@
+--- a/Survivalcraft/Game/SubsystemGameInfo.cs
++++ b/Survivalcraft/Game/SubsystemGameInfo.cs
+@@ -100,6 +100,14 @@
+ 		valuesDictionary.SetValue("TotalElapsedGameTime", TotalElapsedGameTime);
+ 	}
+ 
++	/// <summary>Replaces the elapsed game time with the host-authored value (client).</summary>
++	public void SetNetTotalElapsedGameTime(double totalElapsedGameTime)
++	{
++		TotalElapsedGameTime = totalElapsedGameTime;
++		TotalElapsedGameTimeDelta = (m_lastTotalElapsedGameTime.HasValue ? ((float)(TotalElapsedGameTime - m_lastTotalElapsedGameTime.Value)) : 0f);
++		m_lastTotalElapsedGameTime = TotalElapsedGameTime;
++	}
++
+ 	public void Update(float dt)
+ 	{
+ 		TotalElapsedGameTime += dt;

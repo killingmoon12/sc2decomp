@@ -1,0 +1,54 @@
+--- a/Survivalcraft/Game/PlayerData.cs
++++ b/Survivalcraft/Game/PlayerData.cs
+@@ -44,6 +44,13 @@
+ 
+ 	public int PlayerIndex { get; set; }
+ 
++	/// <summary>
++	/// True when this player is driven by another machine. On the host this is
++	/// set for every connected client; on a client it is set for every player
++	/// that is not the local one.
++	/// </summary>
++	public bool IsRemote { get; set; }
++
+ 	public SubsystemGameWidgets SubsystemGameWidgets { get; private set; }
+ 
+ 	public SubsystemPlayers SubsystemPlayers { get; private set; }
+@@ -125,6 +132,12 @@
+ 	{
+ 		get
+ 		{
++			// On a client the state machine never runs; the player is ready as
++			// soon as the host-provided entity exists.
++			if (MultiplayerManager.IsClientReplica)
++			{
++				return ComponentPlayer != null;
++			}
+ 			if (!(m_stateMachine.CurrentState == "Playing"))
+ 			{
+ 				return m_stateMachine.CurrentState == "PlayerDead";
+@@ -372,6 +385,12 @@
+ 
+ 	public void Update()
+ 	{
++		// Clients do not run player state machines at all: spawning, death and
++		// respawning are decided by the host and arrive as entity updates.
++		if (MultiplayerManager.IsClientReplica)
++		{
++			return;
++		}
+ 		m_stateMachine.Update();
+ 	}
+ 
+@@ -734,6 +753,11 @@
+ 
+ 	private void UpdateSpawnDialog(string largeMessage, string smallMessage, float progress, bool resetProgress)
+ 	{
++		// Remote players have a detached GUI; never open a dialog for them.
++		if (IsRemote)
++		{
++			return;
++		}
+ 		if (resetProgress)
+ 		{
+ 			m_progress = 0f;

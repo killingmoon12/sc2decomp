@@ -1,0 +1,18 @@
+--- a/Survivalcraft/Game/GameWidget.cs
++++ b/Survivalcraft/Game/GameWidget.cs
+@@ -121,6 +121,15 @@
+ 
+ 	private WidgetInputDevice DetermineInputDevices()
+ 	{
++		// Remote players are displayed but never controlled from this machine.
++		if (MultiplayerManager.IsRemotePlayer(PlayerData))
++		{
++			return WidgetInputDevice.None;
++		}
++		if (MultiplayerManager.IsClientReplica && PlayerData.PlayerIndex == MultiplayerManager.LocalPlayerIndex)
++		{
++			return WidgetInputDevice.All | PlayerData.InputDevice;
++		}
+ 		bool flag = false;
+ 		foreach (PlayerData playersDatum in PlayerData.SubsystemPlayers.PlayersData)
+ 		{

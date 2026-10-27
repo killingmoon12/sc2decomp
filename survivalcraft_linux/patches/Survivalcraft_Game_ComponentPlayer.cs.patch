@@ -1,0 +1,26 @@
+--- a/Survivalcraft/Game/ComponentPlayer.cs
++++ b/Survivalcraft/Game/ComponentPlayer.cs
+@@ -70,6 +70,12 @@
+ 
+ 	public void Update(float dt)
+ 	{
++		// Clients never simulate players: the host owns movement, interactions
++		// and inventory changes and streams the results back.
++		if (MultiplayerManager.IsClientReplica)
++		{
++			return;
++		}
+ 		PlayerInput playerInput = ComponentInput.PlayerInput;
+ 		if (ComponentInput.IsControlledByTouch && m_aim.HasValue)
+ 		{
+@@ -330,6 +336,10 @@
+ 		componentCreativeInventory.ActiveSlotIndex = num6;
+ 		ComponentGui.DisplaySmallMessage(block2.GetDisplayName(m_subsystemTerrain, value3), Color.White, blinking: false, playNotificationSound: false);
+ 		m_subsystemAudio.PlaySound("Audio/UI/ButtonClick", 1f, 0f, 0f, 0f);
++		if (MultiplayerManager.IsRemotePlayer(PlayerData))
++		{
++			ComponentInput.ConsumePlayerInput();
++		}
+ 	}
+ 
+ 	protected override void Load(ValuesDictionary valuesDictionary, IdToEntityMap idToEntityMap)

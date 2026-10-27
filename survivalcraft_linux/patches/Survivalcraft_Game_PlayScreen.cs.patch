@@ -1,0 +1,40 @@
+--- a/Survivalcraft/Game/PlayScreen.cs
++++ b/Survivalcraft/Game/PlayScreen.cs
+@@ -13,6 +13,8 @@
+ 
+ 	private long m_totalWorldsSize;
+ 
++	private ButtonWidget m_joinLanButton;
++
+ 	public PlayScreen()
+ 	{
+ 		XElement node = ContentManager.Get<XElement>("Screens/PlayScreen");
+@@ -41,6 +43,16 @@
+ 			}
+ 			return containerWidget;
+ 		}));
++		// Multiplayer: enter the LAN browser from the world list.
++		m_joinLanButton = new BevelledButtonWidget
++		{
++			Text = "Join LAN",
++			Size = new Vector2(190f, 60f),
++			VerticalAlignment = WidgetAlignment.Center,
++			Margin = new Vector2(4f, 0f)
++		};
++		Widget propertiesButton = Children.Find("Properties");
++		propertiesButton.ParentWidget.Children.InsertBefore(propertiesButton, m_joinLanButton);
+ 		m_worldsListWidget.ScrollPosition = 0f;
+ 		m_worldsListWidget.ScrollSpeed = 0f;
+ 		m_worldsListWidget.ItemClicked += (object item) =>
+@@ -107,6 +119,11 @@
+ 				m_worldsListWidget.SelectedItem = null;
+ 			}
+ 		}
++		if (m_joinLanButton.IsClicked)
++		{
++			ScreensManager.SwitchScreen("Multiplayer");
++			m_worldsListWidget.SelectedItem = null;
++		}
+ 		if (Children.Find<ButtonWidget>("Properties").IsClicked && m_worldsListWidget.SelectedItem != null)
+ 		{
+ 			WorldInfo worldInfo = (WorldInfo)m_worldsListWidget.SelectedItem;

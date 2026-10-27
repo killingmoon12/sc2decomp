@@ -16,7 +16,10 @@ APK plus this directory.
     ├── build_survivalcraft_linux.sh        # the build
     ├── patches/                            # patches against the decompile
     ├── prewritten/                         # files copied into src/ verbatim
-    │   └── Engine/                         # SDL window/input, Storage, Utilities
+    │   ├── Engine/                         # SDL window/input, Storage, Utilities
+    │   ├── EntitySystem/                   # EntityNetRegistry (multiplayer ids)
+    │   └── Multiplayer/                    # LAN multiplayer implementation
+    ├── MULTIPLAYER.md                      # multiplayer design, protocol, testing
     ├── src/                                # generated; never edit
     ├── build/                              # output
     │   ├── Survivalcraft                   # launcher
@@ -93,19 +96,68 @@ P/Invokes, which resolve to Mesa's GLES-on-GL layer (`libGLESv2.so.2`), so
 shaders and bindings are unchanged from the Android build. Presenting is done
 with `SDL_GL_SwapWindow`.
 
+## Multiplayer (LAN)
+
+The port adds host-authoritative LAN play for up to eight players. The host
+keeps running a normal world and streams it to clients; clients are replicas
+that never simulate the world themselves.
+
+* **Host:** load a world, open the in-game menu (**More**), choose
+  **Open World To LAN**.
+* **Join:** on the `Existing Worlds` screen press **Join LAN**, pick the world
+  and press **Join**.
+
+Ports: `27020/tcp` for game traffic, `27021/udp` for LAN discovery. Both sides
+must run the same protocol version (same build).
+
+See **[`MULTIPLAYER.md`](MULTIPLAYER.md)** for the architecture, the full wire
+protocol, the file map, the testing checklist, the contribution workflow and the
+known limitations.
+
 ## Patches
+
+Patches are applied with `patch -p1` against the pristine decompile. A patch
+that does not apply cleanly stops the build.
+
+### Desktop port
 
 | Patch | Purpose |
 |-------|---------|
-| `Engine_Storage.cs` | Replace Android `StatFs` with `DriveInfo` |
-| `Engine_Utilities.cs` | `/proc/meminfo` memory query |
-| `Survivalcraft_ComponentInput.cs` | Desktop port: start in mouse/keyboard mode |
-| `Survivalcraft_DeviceManager.cs` | Read device info from `/proc` and `/etc/os-release` |
-| `Survivalcraft_ScreenCaptureManager.cs` | Save screenshots as PNG |
-| `Survivalcraft_ScreenResolutionManager.cs` | Default to 96 DPI |
-| `Survivalcraft_WebManager.cs` | Ping via `System.Net.NetworkInformation` |
-| `Survivalcraft_WebBrowserManager.cs` | `Process.Start` with `UseShellExecute` |
-| `Survivalcraft_*ExternalContentProvider.cs` | Linux provider under `~/SurvivalcraftExternal` |
+| `Survivalcraft_Game_ComponentInput.cs` | Start in mouse/keyboard mode; network input hooks |
+| `Survivalcraft_Game_DeviceManager.cs` | Read device info from `/proc` and `/etc/os-release` |
+| `Survivalcraft_Game_ScreenCaptureManager.cs` | Save screenshots as PNG |
+| `Survivalcraft_Game_ScreenResolutionManager.cs` | Default to 96 DPI |
+| `Survivalcraft_Game_WebManager.cs` | Ping via `System.Net.NetworkInformation` |
+| `Survivalcraft_Game_WebBrowserManager.cs` | `Process.Start` with `UseShellExecute` |
+| `Survivalcraft_Game_*ExternalContentProvider.cs` | Linux provider under `~/SurvivalcraftExternal` |
+
+The SDL window, input, storage and memory backends are whole-file replacements
+in `prewritten/Engine/` rather than patches.
+
+### Multiplayer
+
+| Patch | Purpose |
+|-------|---------|
+| `EntitySystem.Android.Net_GameEntitySystem_Entity.cs` | Persist `MultiplayerNetId` |
+| `EntitySystem.Android.Net_GameEntitySystem_Project.cs` | Apply `EntityNetRegistry.SaveFilter` |
+| `Survivalcraft_Game_PlayerData.cs` | `IsRemote`, replica readiness |
+| `Survivalcraft_Game_SubsystemPlayers.cs` | 8 players, `AddPlayerDataAt`, save filtering |
+| `Survivalcraft_Game_SubsystemGameWidgets.cs` | 8 widgets, detached remote widgets |
+| `Survivalcraft_Game_SubsystemUpdate.cs` | Client simulation freeze |
+| `Survivalcraft_Game_SubsystemTerrain.cs` | Stream block edits |
+| `Survivalcraft_Game_SubsystemGameInfo.cs` | Host-authored game time |
+| `Survivalcraft_Game_ComponentPlayer.cs` | Client early-out, remote input, look prediction |
+| `Survivalcraft_Game_ComponentInput.cs` | `SetPlayerInput` / `ConsumePlayerInput` |
+| `Survivalcraft_Game_ComponentGui.cs` | No GUI for remote players |
+| `Survivalcraft_Game_ComponentHealth.cs` | `SetNetHealth` |
+| `Survivalcraft_Game_ComponentVitalStats.cs` | `SetNetVitals` |
+| `Survivalcraft_Game_ComponentInventoryBase.cs` | `SetSlotNet` |
+| `Survivalcraft_Game_ComponentLocomotion.cs` | Replicated look angles |
+| `Survivalcraft_Game_GameWidget.cs` | Input devices per role |
+| `Survivalcraft_Game_GameManager.cs` | Multiplayer lifecycle hooks |
+| `Survivalcraft_Game_GameMenuDialog.cs` | Host / stop / status entries |
+| `Survivalcraft_Game_PlayScreen.cs` | `Join LAN` button |
+| `Survivalcraft_Game_ScreensManager.cs` | Register the multiplayer screen |
 
 ## Requirements
 

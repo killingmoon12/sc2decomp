@@ -12,3 +12,69 @@
  
  	public bool IsControlledByVr
  	{
+@@ -53,6 +56,38 @@
+ 		SplitSourceSlotIndex = slotIndex;
+ 	}
+ 
++	/// <summary>Applies an input received from a remote client (host side).</summary>
++	public void SetPlayerInput(PlayerInput input)
++	{
++		m_playerInput = input;
++	}
++
++	/// <summary>
++	/// Clears the parts of a networked input that were already applied this
++	/// frame. Mouse look is a rate, so leaving it set would keep turning the
++	/// player, and one-shot actions would fire repeatedly.
++	/// </summary>
++	public void ConsumePlayerInput()
++	{
++		m_playerInput.Look = Vector2.Zero;
++		m_playerInput.CameraLook = Vector2.Zero;
++		m_playerInput.ScrollInventory = 0;
++		m_playerInput.SelectInventorySlot = null;
++		m_playerInput.Jump = false;
++		m_playerInput.ToggleCreativeFly = false;
++		m_playerInput.ToggleCrouch = false;
++		m_playerInput.ToggleMount = false;
++		m_playerInput.EditItem = false;
++		m_playerInput.Drop = false;
++		m_playerInput.ToggleInventory = false;
++		m_playerInput.ToggleClothing = false;
++		m_playerInput.Hit = null;
++		m_playerInput.Interact = null;
++		m_playerInput.PickBlockType = null;
++		m_playerInput.TakeScreenshot = false;
++		m_playerInput.SwitchCameraMode = false;
++	}
++
+ 	public Ray3? CalculateVrHandRay()
+ 	{
+ 		if (VrManager.IsControllerPresent(VrController.Right))
+@@ -67,6 +102,12 @@
+ 
+ 	public void Update(float dt)
+ 	{
++		// On the host, remote players get their input from the network. Never
++		// overwrite it with this machine's keyboard or mouse.
++		if (MultiplayerManager.IsRemotePlayer(m_componentPlayer.PlayerData))
++		{
++			return;
++		}
+ 		m_playerInput = default;
+ 		UpdateInputFromMouseAndKeyboard(m_componentPlayer.GameWidget.Input);
+ 		UpdateInputFromGamepad(m_componentPlayer.GameWidget.Input);
+@@ -126,6 +167,13 @@
+ 		{
+ 			SetSplitSourceInventoryAndSlot(null, -1);
+ 		}
++		if (MultiplayerManager.IsClientReplica)
++		{
++			// Keep the camera responsive locally, then let the host do the
++			// authoritative simulation using exactly this input.
++			MultiplayerManager.ApplyLocalLook(m_componentPlayer, m_playerInput.Look, dt);
++			MultiplayerManager.SubmitLocalInput(m_playerInput);
++		}
+ 	}
+ 
+ 	protected override void Load(ValuesDictionary valuesDictionary, IdToEntityMap idToEntityMap)
