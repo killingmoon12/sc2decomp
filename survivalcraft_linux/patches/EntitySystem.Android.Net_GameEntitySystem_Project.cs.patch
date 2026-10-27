@@ -20,3 +20,12 @@
  		Dictionary<Entity, bool> dictionary = DetermineNotOwnedEntities(entities);
  		int num = 1;
  		Dictionary<Entity, int> dictionary2 = new Dictionary<Entity, int>();
+@@ -287,6 +293,7 @@
+ 		if (m_entities != null)
+ 		{
+ 			foreach (Entity key in m_entities.Keys)
+ 			{
++				EntityNetRegistry.Unregister(key);
+ 				key.Dispose();
+ 			}
+ 		}

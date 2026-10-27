@@ -231,6 +231,29 @@ the socket. TCP keepalive is enabled as a second signal. `DisconnectClient` also
 removes the host-side `PlayerData` defensively, so a failed entity removal can
 never leave a ghost player in the world.
 
+### Resource lifecycle
+
+Everything a session allocates is released when that session ends, and the
+per-connection buffers are bounded so a stalled or hostile peer cannot grow the
+process without limit:
+
+- `NetChannel` keeps an outbound backlog budget (4096 frames / 64 MiB). A peer
+  that stops reading is disconnected instead of being buffered forever. The
+  world snapshot is a single oversized frame, so it bypasses that budget and is
+  built with one copy instead of three.
+- The host disconnects connections that never send `Hello` within 30 s and
+  clients that take longer than 120 s to load. Cell edits buffered for a
+  loading client are capped; exceeding the cap disconnects that client.
+- Inbound queues on both sides are capped, and `Stop`/`DisconnectClient` drain
+  the queues and clear the per-client entity and cell sets immediately.
+- `EntityNetRegistry` is reset when a project is disposed (client joins used to
+  keep the whole disposed world reachable through its static maps).
+- Cancelling a join (or backing out of the multiplayer screen) closes the
+  half-open channel and schedules the imported cache world for deletion; a
+  failed TCP connect disposes its socket.
+- `MultiplayerInventorySync` drops cached snapshots of inventories whose entity
+  no longer exists.
+
 ### Inventories
 
 There are three distinct inventory paths:

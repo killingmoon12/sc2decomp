@@ -24,11 +24,36 @@ public sealed class NetChannel : IDisposable
 		public byte[] Body;
 	}
 
+	/// <summary>One framed message waiting for the writer thread.</summary>
+	private struct OutFrame
+	{
+		public byte[] Data;
+
+		public int Length;
+
+		/// <summary>False for oversized one-off frames (the world snapshot).</summary>
+		public bool Counted;
+	}
+
+	/// <summary>
+	/// Limits for the outgoing queue. A client that stops reading (minimized,
+	/// suspended, network hiccup) would otherwise make the host buffer frames
+	/// without bound. Dropping single frames would corrupt the stream, so the
+	/// connection is closed once the backlog gets too large.
+	/// </summary>
+	private const int MaxQueuedFrames = 4096;
+
+	private const long MaxQueuedBytes = 64L * 1024 * 1024;
+
 	private readonly Socket m_socket;
 
 	private readonly NetworkStream m_stream;
 
-	private readonly BlockingCollection<byte[]> m_sendQueue = new BlockingCollection<byte[]>();
+	private readonly BlockingCollection<OutFrame> m_sendQueue = new BlockingCollection<OutFrame>();
+
+	private long m_queuedBytes;
+
+	private int m_queuedFrames;
 
 	private readonly Thread m_readerThread;
 
@@ -106,12 +131,78 @@ public sealed class NetChannel : IDisposable
 		array[1] = (byte)(num >> 8);
 		array[2] = (byte)(num >> 16);
 		array[3] = (byte)(num >> 24);
+		Enqueue(array, array.Length);
+	}
+
+	/// <summary>
+	/// Queues a world snapshot without copying the payload through an extra
+	/// MemoryStream. Worlds can be hundreds of megabytes, so the copies made by
+	/// <see cref="Send"/> would otherwise double or triple the peak memory.
+	/// </summary>
+	public void SendWorldSnapshot(byte[] payload, int length)
+	{
+		if (m_closed)
+		{
+			return;
+		}
+		if (payload == null)
+		{
+			length = 0;
+		}
+		int num = 1 + 4 + length;
+		if (num > MultiplayerProtocol.MaxFrameSize)
+		{
+			throw new InvalidOperationException("World snapshot is too large to send.");
+		}
+		byte[] array = new byte[4 + num];
+		array[0] = (byte)num;
+		array[1] = (byte)(num >> 8);
+		array[2] = (byte)(num >> 16);
+		array[3] = (byte)(num >> 24);
+		array[4] = (byte)MultiplayerMessage.Snapshot;
+		array[5] = (byte)length;
+		array[6] = (byte)(length >> 8);
+		array[7] = (byte)(length >> 16);
+		array[8] = (byte)(length >> 24);
+		if (length > 0)
+		{
+			Buffer.BlockCopy(payload, 0, array, 9, length);
+		}
+		// A single snapshot frame can legitimately be larger than the normal
+		// backlog limit, so it must not trip it.
+		Enqueue(array, array.Length, countTowardsLimit: false);
+	}
+
+	private void Enqueue(byte[] frame, int length, bool countTowardsLimit = true)
+	{
+		if (countTowardsLimit)
+		{
+			long num = Interlocked.Add(ref m_queuedBytes, length);
+			int num2 = Interlocked.Increment(ref m_queuedFrames);
+			if (num > MaxQueuedBytes || num2 > MaxQueuedFrames)
+			{
+				Interlocked.Add(ref m_queuedBytes, -length);
+				Interlocked.Decrement(ref m_queuedFrames);
+				Close("The connection is too slow to keep up.");
+				return;
+			}
+		}
 		try
 		{
-			m_sendQueue.Add(array);
+			m_sendQueue.Add(new OutFrame
+			{
+				Data = frame,
+				Length = length,
+				Counted = countTowardsLimit
+			});
 		}
 		catch (InvalidOperationException)
 		{
+			if (countTowardsLimit)
+			{
+				Interlocked.Add(ref m_queuedBytes, -length);
+				Interlocked.Decrement(ref m_queuedFrames);
+			}
 		}
 	}
 
@@ -211,10 +302,21 @@ public sealed class NetChannel : IDisposable
 	{
 		try
 		{
-			foreach (byte[] item in m_sendQueue.GetConsumingEnumerable())
+			foreach (OutFrame item in m_sendQueue.GetConsumingEnumerable())
 			{
-				m_stream.Write(item, 0, item.Length);
-				m_stream.Flush();
+				try
+				{
+					m_stream.Write(item.Data, 0, item.Length);
+					m_stream.Flush();
+				}
+				finally
+				{
+					if (item.Counted)
+					{
+						Interlocked.Add(ref m_queuedBytes, -item.Length);
+						Interlocked.Decrement(ref m_queuedFrames);
+					}
+				}
 			}
 		}
 		catch (Exception ex)
@@ -268,5 +370,13 @@ public sealed class NetChannel : IDisposable
 	public void Dispose()
 	{
 		Close("Disposed.");
+		// Release any queued frames now instead of leaving them reachable
+		// through the BlockingCollection until the GC collects the channel.
+		OutFrame frame;
+		while (m_sendQueue.TryTake(out frame))
+		{
+		}
+		Interlocked.Exchange(ref m_queuedBytes, 0L);
+		Interlocked.Exchange(ref m_queuedFrames, 0);
 	}
 }

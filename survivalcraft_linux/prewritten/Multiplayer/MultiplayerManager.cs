@@ -207,6 +207,7 @@ public static class MultiplayerManager
 		}
 		catch (Exception ex)
 		{
+			MultiplayerDiscovery.StopAnnouncer();
 			EntityNetRegistry.Reset();
 			s_server?.Dispose();
 			s_server = null;
@@ -336,7 +337,11 @@ public static class MultiplayerManager
 			return;
 		}
 		PlayerName = playerName;
+		// A previous result that was never loaded into a game still owns a
+		// socket and an imported cache world.
+		MultiplayerJoinResult previousResult = s_joinResult;
 		s_joinResult = null;
+		DiscardJoinResult(previousResult);
 		// Clear anything left over from an earlier session before the
 		// downloaded world registers its own network ids.
 		EntityNetRegistry.Reset();
@@ -386,9 +391,56 @@ public static class MultiplayerManager
 
 	public static void CancelJoin()
 	{
+		MultiplayerJoinResult result = s_joinResult;
 		s_joinResult = null;
+		Task<MultiplayerJoinResult> task = s_joinTask;
 		s_joinTask = null;
 		IsJoiningProject = false;
+		DiscardJoinResult(result);
+		if (task != null && !task.IsCompleted)
+		{
+			// The download cannot be aborted safely (it may be in the middle of
+			// importing a world), so let it finish and release whatever it
+			// produced instead of leaking the socket and the cache world.
+			task.ContinueWith(delegate(Task<MultiplayerJoinResult> completed)
+			{
+				DiscardJoinResult(completed.Status == TaskStatus.RanToCompletion ? completed.Result : null);
+			}, TaskScheduler.Default);
+		}
+		else if (task != null)
+		{
+			DiscardJoinResult(task.Status == TaskStatus.RanToCompletion ? task.Result : null);
+		}
+	}
+
+	/// <summary>
+	/// Releases a join result that will never be loaded into a running game.
+	/// Its socket and, for a successful download, its imported cache world
+	/// would otherwise stay alive forever.
+	/// </summary>
+	private static void DiscardJoinResult(MultiplayerJoinResult result)
+	{
+		if (result == null || !result.Success || IsActive)
+		{
+			return;
+		}
+		if (result.Channel != null)
+		{
+			try
+			{
+				result.Channel.Dispose();
+			}
+			catch (Exception)
+			{
+			}
+			result.Channel = null;
+		}
+		if (!string.IsNullOrEmpty(result.WorldDirectory) && result.WorldDirectory != s_clientWorldDirectory)
+		{
+			// Deleted from the game thread by Update(), which is the only
+			// thread that may touch the world list.
+			s_worldToDelete = result.WorldDirectory;
+		}
 	}
 
 	/// <summary>
@@ -405,21 +457,54 @@ public static class MultiplayerManager
 		if (GameManager.Project == null || s_joinResult == null)
 		{
 			IsJoiningProject = false;
+			// The download finished but no world was loaded; nothing will ever
+			// attach the channel, so release it (and the cache world).
+			DiscardJoinResult(s_joinResult);
+			s_joinResult = null;
 			return;
 		}
 		IsJoiningProject = false;
 		try
 		{
+			if (s_client != null)
+			{
+				// Defensive: never replace a live channel without closing it.
+				s_client.Stop("Reconnected.");
+				s_client = null;
+			}
 			s_client = new MultiplayerClient(GameManager.Project, s_joinResult, s_hostName);
 			Role = MultiplayerRole.Client;
 			s_clientWorldDirectory = s_joinResult.WorldDirectory;
 			s_client.Start();
+			// The live client owns the channel now; the join result is only
+			// needed until this point and must not be disposed later as if it
+			// were an abandoned join.
+			s_joinResult = null;
 			s_statusText = DescribeStatus();
 			Log.Information("[Multiplayer] Joined game at {0}", s_client.HostDescription);
 		}
 		catch (Exception ex)
 		{
 			Role = MultiplayerRole.Off;
+			if (s_client != null)
+			{
+				s_client.Stop("Could not attach the client session.");
+				s_client = null;
+			}
+			// Close the channel, but do not queue the imported world for
+			// deletion: the project may still be loading/playing it.
+			if (s_joinResult != null && s_joinResult.Channel != null)
+			{
+				try
+				{
+					s_joinResult.Channel.Dispose();
+				}
+				catch (Exception)
+				{
+				}
+				s_joinResult.Channel = null;
+			}
+			s_joinResult = null;
 			Log.Error("[Multiplayer] Could not attach client session: " + ex);
 			s_statusText = "Could not join: " + ex.Message;
 		}
@@ -447,6 +532,11 @@ public static class MultiplayerManager
 			}
 		}
 		MultiplayerInventorySync.Reset();
+		// The client never enabled the registry itself, but entities loaded
+		// from the snapshot are registered. Without this Reset the static
+		// dictionaries keep every entity of the disposed world alive.
+		EntityNetRegistry.Reset();
+		MultiplayerPickables.Reset();
 		IsJoiningProject = false;
 		s_joinTask = null;
 		s_joinResult = null;

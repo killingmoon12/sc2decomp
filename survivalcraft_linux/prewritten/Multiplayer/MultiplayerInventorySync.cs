@@ -54,6 +54,7 @@ public static class MultiplayerInventorySync
 		{
 			return;
 		}
+		HashSet<int> present = new HashSet<int>();
 		foreach (Entity entity in project.Entities)
 		{
 			if (entity.FindComponent<ComponentPlayer>(throwOnError: false) != null)
@@ -70,6 +71,7 @@ public static class MultiplayerInventorySync
 			{
 				continue;
 			}
+			present.Add(netId);
 			int count = inventory.SlotsCount;
 			int[] values = new int[count];
 			int[] counts = new int[count];
@@ -97,6 +99,23 @@ public static class MultiplayerInventorySync
 				Values = values,
 				Counts = counts
 			});
+		}
+		// Drop cached snapshots of entities that no longer exist; otherwise
+		// every chest that was ever loaded stays referenced for the session.
+		if (s_known.Count > present.Count)
+		{
+			List<int> stale = new List<int>();
+			foreach (int key in s_known.Keys)
+			{
+				if (!present.Contains(key))
+				{
+					stale.Add(key);
+				}
+			}
+			foreach (int item in stale)
+			{
+				s_known.Remove(item);
+			}
 		}
 	}
 

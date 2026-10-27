@@ -68,12 +68,26 @@ public static class MultiplayerDiscovery
 	public static void StopAnnouncer()
 	{
 		s_announcerRunning = false;
+		Thread thread = s_announcerThread;
+		s_announcerThread = null;
 		try
 		{
 			s_announcer?.Close();
 		}
 		catch (Exception)
 		{
+		}
+		// Closing the socket makes Receive() return immediately; wait for the
+		// thread so repeated host start/stop cycles cannot pile them up.
+		if (thread != null && thread != Thread.CurrentThread)
+		{
+			try
+			{
+				thread.Join(500);
+			}
+			catch (Exception)
+			{
+			}
 		}
 		s_announcer = null;
 		s_server = null;
@@ -170,6 +184,12 @@ public static class MultiplayerDiscovery
 	public static void StopProbe()
 	{
 		s_probeRunning = false;
+		// The discovered games are only a screen-local cache; release them
+		// when leaving instead of keeping the objects for the process lifetime.
+		lock (s_gamesLock)
+		{
+			s_games.Clear();
+		}
 	}
 
 	private static void ProbeLoop()

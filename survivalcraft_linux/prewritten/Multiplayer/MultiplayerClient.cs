@@ -114,6 +114,11 @@ public sealed class MultiplayerClient
 
 	private bool m_ready;
 
+	private bool m_stopped;
+
+	/// <summary>Frames accepted from the socket before the client is considered flooded.</summary>
+	private const int MaxInboxFrames = 4096;
+
 	public int PlayerCount { get; private set; }
 
 	public string HostDescription => m_hostDescription;
@@ -138,6 +143,11 @@ public sealed class MultiplayerClient
 	{
 		m_channel.MessageReceived += delegate(NetChannel.Frame frame)
 		{
+			if (m_inbox.Count >= MaxInboxFrames)
+			{
+				m_channel.Close("The host sent too many messages.");
+				return;
+			}
 			m_inbox.Enqueue(frame);
 		};
 		m_channel.Start();
@@ -148,7 +158,29 @@ public sealed class MultiplayerClient
 
 	public void Stop(string reason)
 	{
-		m_channel?.Close(reason);
+		if (m_stopped)
+		{
+			return;
+		}
+		m_stopped = true;
+		m_ready = false;
+		try
+		{
+			m_channel?.Dispose();
+		}
+		catch (Exception)
+		{
+		}
+		NetChannel.Frame frame;
+		while (m_inbox.TryDequeue(out frame))
+		{
+		}
+		m_states.Clear();
+		m_pendingCellChanges.Clear();
+		m_hasInput = false;
+		m_lastLocalInventoryValues = null;
+		m_lastLocalInventoryCounts = null;
+		m_hasPendingLocalInventory = false;
 	}
 
 	public void SubmitInput(PlayerInput input)
@@ -515,10 +547,12 @@ public sealed class MultiplayerClient
 
 	private void RemoveEntity(int netId)
 	{
+		// Drop the cached state even if the entity was never created locally
+		// (for example an add and a remove arrive in the same batch).
+		m_states.Remove(netId);
 		Entity entity = EntityNetRegistry.Find(netId);
 		if (entity != null)
 		{
-			m_states.Remove(netId);
 			m_project.RemoveEntity(entity, disposeEntity: true);
 		}
 	}
@@ -910,14 +944,17 @@ public sealed class MultiplayerClient
 		{
 			if (!tcpClient.ConnectAsync(address, port).Wait(5000))
 			{
+				tcpClient.Dispose();
 				return MultiplayerJoinResult.Failed("Could not reach " + address + ":" + port + " (timeout).");
 			}
 		}
 		catch (Exception ex)
 		{
+			tcpClient.Dispose();
 			return MultiplayerJoinResult.Failed("Could not connect to " + address + ":" + port + ": " + ex.Message);
 		}
 		MemoryStream snapshot = null;
+		bool socketTransferred = false;
 		int num = -1;
 		string text = string.Empty;
 		string text2 = string.Empty;
@@ -975,6 +1012,9 @@ public sealed class MultiplayerClient
 				return MultiplayerJoinResult.Failed("The downloaded world could not be read.");
 			}
 			NetChannel netChannel = new NetChannel(tcpClient.Client, "Multiplayer Host");
+			// The channel now owns the socket; disposing the TcpClient would
+			// close it out from under the reader/writer threads.
+			socketTransferred = true;
 			return new MultiplayerJoinResult
 			{
 				Success = true,
@@ -992,6 +1032,18 @@ public sealed class MultiplayerClient
 		finally
 		{
 			snapshot?.Dispose();
+			if (!socketTransferred)
+			{
+				// Every failed join used to leak its socket and read/write
+				// buffers; repeated attempts exhausted file descriptors.
+				try
+				{
+					tcpClient.Dispose();
+				}
+				catch (Exception)
+				{
+				}
+			}
 		}
 	}
 }

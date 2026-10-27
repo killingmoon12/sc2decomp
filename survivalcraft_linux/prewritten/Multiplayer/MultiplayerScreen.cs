@@ -300,6 +300,13 @@ public class MultiplayerScreen : Screen
 	public override void Leave()
 	{
 		MultiplayerDiscovery.StopProbe();
+		// If the player backed out while a download was still running, make
+		// sure the socket and the imported cache world are released. A screen
+		// switch caused by a successful download must keep its result.
+		if (!m_switchedToGame)
+		{
+			MultiplayerManager.CancelJoin();
+		}
 	}
 
 	public override void Update()

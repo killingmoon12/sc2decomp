@@ -56,6 +56,9 @@ public sealed class MultiplayerServer : IDisposable
 
 		public List<CellChange> PendingCells = new List<CellChange>();
 
+		/// <summary>Set when a still-loading client falls too far behind.</summary>
+		public bool PendingCellsOverflow;
+
 		public HashSet<int> KnownEntities = new HashSet<int>();
 
 		/// <summary>
@@ -89,7 +92,21 @@ public sealed class MultiplayerServer : IDisposable
 
 	private readonly List<BlockInventoryRecord> m_inventoryRecords = new List<BlockInventoryRecord>();
 
-	private readonly HashSet<Entity> m_unserializableEntities = new HashSet<Entity>();
+	/// <summary>
+	/// Net ids of entities that could not be serialized. Stored as ids, not
+	/// entity references, so a removed entity cannot keep its whole object
+	/// graph alive just because it was once logged.
+	/// </summary>
+	private readonly HashSet<int> m_unserializableEntities = new HashSet<int>();
+
+	/// <summary>Frames a client may queue before it is considered abusive.</summary>
+	private const int MaxInboxFrames = 4096;
+
+	/// <summary>Cell changes buffered for a client that is still loading.</summary>
+	private const int MaxPendingCells = 32768;
+
+	/// <summary>How long a connection may sit without starting the handshake.</summary>
+	private const double HandshakeTimeout = 30.0;
 
 	private TcpListener m_listener;
 
@@ -194,6 +211,13 @@ public sealed class MultiplayerServer : IDisposable
 				clientSlot.Channel = new NetChannel(socket, "Multiplayer Client");
 				clientSlot.Channel.MessageReceived += delegate(NetChannel.Frame frame)
 				{
+					// A client that floods the host must not grow this queue
+					// without bound while the game thread is busy.
+					if (m_inbox.Count >= MaxInboxFrames)
+					{
+						clientSlot.Channel.Close("Too many messages queued.");
+						return;
+					}
 					m_inbox.Enqueue(new KeyValuePair<ClientSlot, NetChannel.Frame>(clientSlot, frame));
 				};
 				clientSlot.Channel.Start();
@@ -560,14 +584,18 @@ public sealed class MultiplayerServer : IDisposable
 
 	private void SendSnapshot(ClientSlot slot)
 	{
-		byte[] array;
+		byte[] buffer;
+		int length;
 		MultiplayerManager.BeginSnapshotSave();
 		try
 		{
 			GameManager.SaveProject(waitForCompletion: true, showErrorDialog: false);
 			using MemoryStream memoryStream = new MemoryStream();
 			WorldsManager.ExportWorld(GameManager.WorldInfo.DirectoryName, memoryStream);
-			array = memoryStream.ToArray();
+			// Send from the stream buffer directly; ToArray() would allocate a
+			// second copy of the whole (possibly very large) snapshot.
+			buffer = memoryStream.GetBuffer();
+			length = (int)memoryStream.Length;
 		}
 		finally
 		{
@@ -587,13 +615,9 @@ public sealed class MultiplayerServer : IDisposable
 			writer.Write(slot.Name);
 			writer.Write(WorldName);
 		});
-		slot.Channel.Send(MultiplayerMessage.Snapshot, delegate(EngineBinaryWriter writer)
-		{
-			writer.Write(array.Length);
-			writer.Write(array);
-		});
+		slot.Channel.SendWorldSnapshot(buffer, length);
 		slot.SnapshotSent = true;
-		Log.Information("[Multiplayer] Sent world snapshot ({0} KiB) to {1}", array.Length / 1024, slot.Name);
+		Log.Information("[Multiplayer] Sent world snapshot ({0} KiB) to {1}", length / 1024, slot.Name);
 	}
 
 	private void CompleteJoin(ClientSlot slot)
@@ -616,10 +640,14 @@ public sealed class MultiplayerServer : IDisposable
 				slot.KnownEntities.Add(snapshotEntityId);
 			}
 		}
+		HashSet<int> snapshotIds = slot.SnapshotEntityIds;
+		// The snapshot list is only needed until the client is ready; keeping
+		// it for the rest of the session is pure overhead.
+		slot.SnapshotEntityIds = null;
 		foreach (Entity entity in m_project.Entities)
 		{
 			int orCreateId = EntityNetRegistry.GetOrCreateId(entity);
-			if (slot.SnapshotEntityIds != null && slot.SnapshotEntityIds.Contains(orCreateId))
+			if (snapshotIds != null && snapshotIds.Contains(orCreateId))
 			{
 				continue;
 			}
@@ -665,7 +693,20 @@ public sealed class MultiplayerServer : IDisposable
 			}
 			if (!client.Ready)
 			{
-				if (client.SnapshotSent && realTime - client.ConnectTime > 120.0)
+				if (client.PendingCellsOverflow)
+				{
+					DisconnectClient(client, "Could not keep up while loading the world.");
+				}
+				else if (!client.SnapshotSent)
+				{
+					// A connection that never even says hello used to stay
+					// forever, holding a socket and two threads per attempt.
+					if (realTime - client.ConnectTime > HandshakeTimeout)
+					{
+						DisconnectClient(client, "Timed out during the join handshake.");
+					}
+				}
+				else if (realTime - client.ConnectTime > 120.0)
 				{
 					DisconnectClient(client, "Timed out while loading the world.");
 				}
@@ -706,7 +747,16 @@ public sealed class MultiplayerServer : IDisposable
 		{
 			if (!client.Disconnected && !client.Ready && client.SnapshotSent)
 			{
-				client.PendingCells.Add(item);
+				if (client.PendingCells.Count >= MaxPendingCells)
+				{
+					// Do not buffer an unbounded amount of world edits for a
+					// client that may never finish loading.
+					client.PendingCellsOverflow = true;
+				}
+				else
+				{
+					client.PendingCells.Add(item);
+				}
 			}
 		}
 	}
@@ -902,7 +952,7 @@ public sealed class MultiplayerServer : IDisposable
 			// Entities that own other entities cannot be serialized on their
 			// own. They are recreated together with their owner, so this is
 			// expected and only worth reporting once per entity.
-			if (m_unserializableEntities.Add(entity))
+			if (m_unserializableEntities.Add(EntityNetRegistry.GetOrCreateId(entity)))
 			{
 				Log.Warning("[Multiplayer] Could not serialize entity \"{0}\": {1}", entity.ValuesDictionary.DatabaseObject.Name, ex.Message);
 			}
@@ -1040,11 +1090,18 @@ public sealed class MultiplayerServer : IDisposable
 		slot.Disconnected = true;
 		try
 		{
-			slot.Channel.Close(reason);
+			// Dispose (not just Close) also releases any frames that are still
+			// queued for the writer thread.
+			slot.Channel.Dispose();
 		}
 		catch (Exception)
 		{
 		}
+		slot.PendingCells.Clear();
+		slot.KnownEntities.Clear();
+		slot.SnapshotEntityIds = null;
+		slot.HasPendingInput = false;
+		slot.PendingInput = default(PlayerInput);
 		PlayerData playerData = slot.PlayerData;
 		slot.PlayerData = null;
 		if (playerData != null)
@@ -1100,12 +1157,15 @@ public sealed class MultiplayerServer : IDisposable
 
 	public void Stop()
 	{
-		if (!m_running)
-		{
-			return;
-		}
+		bool wasRunning = m_running;
 		m_running = false;
 		m_unserializableEntities.Clear();
+		m_pendingCells.Clear();
+		m_inventoryRecords.Clear();
+		KeyValuePair<ClientSlot, NetChannel.Frame> queued;
+		while (m_inbox.TryDequeue(out queued))
+		{
+		}
 		try
 		{
 			m_listener?.Stop();
@@ -1113,13 +1173,37 @@ public sealed class MultiplayerServer : IDisposable
 		catch (Exception)
 		{
 		}
+		// Wait for the accept loop so it cannot add a client after the list
+		// below has been cleared.
+		Thread acceptThread = m_acceptThread;
+		m_acceptThread = null;
+		if (acceptThread != null && acceptThread != Thread.CurrentThread)
+		{
+			try
+			{
+				acceptThread.Join(500);
+			}
+			catch (Exception)
+			{
+			}
+		}
+		if (!wasRunning)
+		{
+			// Nothing was started, but make sure a half-open listener or an
+			// empty client list cannot keep the server alive.
+			lock (m_clients)
+			{
+				m_clients.Clear();
+			}
+			return;
+		}
 		foreach (ClientSlot client in SnapshotClients())
 		{
 			client.Channel.Send(MultiplayerMessage.Disconnect, delegate(EngineBinaryWriter writer)
 			{
 				writer.Write("The host closed the game.");
 			});
-			client.Channel.Close("Host stopped.");
+			client.Channel.Dispose();
 		}
 		List<ClientSlot> list = SnapshotClients();
 		foreach (ClientSlot item in list)
@@ -1136,6 +1220,9 @@ public sealed class MultiplayerServer : IDisposable
 				item.PlayerData = null;
 			}
 			item.Disconnected = true;
+			item.PendingCells.Clear();
+			item.KnownEntities.Clear();
+			item.SnapshotEntityIds = null;
 		}
 		lock (m_clients)
 		{
