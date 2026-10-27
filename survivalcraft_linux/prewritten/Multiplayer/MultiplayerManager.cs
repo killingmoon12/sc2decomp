@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Sockets;
+using System.Text;
 using System.Threading.Tasks;
 using Engine;
 using GameEntitySystem;
@@ -15,7 +16,7 @@ public enum MultiplayerRole
 }
 
 /// <summary>
-/// Entry point and shared state for LAN multiplayer.
+/// Entry point and shared state for multiplayer (LAN and internet).
 ///
 /// The host owns the simulation: it runs a normal single-player world and
 /// streams the results to connected clients. A client is a thin replica: it
@@ -35,7 +36,29 @@ public static class MultiplayerManager
 
 	public const double InventorySyncInterval = 1.0;
 
+	/// <summary>How often the host publishes the dig/animation state of players.</summary>
+	public const double MiningStateInterval = 1.0 / 30.0;
+
+	/// <summary>How often the host publishes dropped item stacks.</summary>
+	public const double PickableSyncInterval = 0.1;
+
+	/// <summary>
+	/// A ready client that stops sending input for this long is considered gone.
+	/// Clients send input every frame (30 Hz), so this only catches crashes and
+	/// killed processes.
+	/// </summary>
+	public const double ClientInputTimeout = 10.0;
+
 	public const int MaxPlayers = 8;
+
+	/// <summary>
+	/// File written into worlds imported by a client. Such worlds are only a
+	/// cache of the host world; leftover copies from a crash are removed the
+	/// next time a world list is shown.
+	/// </summary>
+	public const string ClientCacheMarkerFileName = "MultiplayerCache.txt";
+
+	public const float PickableSyncDistanceSquared = 96f * 96f;
 
 	private static MultiplayerServer s_server;
 
@@ -131,6 +154,28 @@ public static class MultiplayerManager
 		return "Multiplayer is off.";
 	}
 
+	/// <summary>Host-facing explanation of how other players can connect.</summary>
+	public static string DescribeHostingDetails()
+	{
+		if (!IsHost || s_server == null)
+		{
+			return DescribeStatus();
+		}
+		int port = s_server.Port;
+		StringBuilder stringBuilder = new StringBuilder();
+		stringBuilder.Append("Hosting on TCP port ").Append(port).Append(" (").Append(s_server.ConnectedPlayerCount).Append('/').Append(MaxPlayers).Append(" players).\n\n");
+		stringBuilder.Append("Same network (LAN): connect to one of these addresses:\n");
+		foreach (string localAddress in MultiplayerDiscovery.GetLocalAddresses())
+		{
+			stringBuilder.Append("  ").Append(localAddress).Append(':').Append(port).Append('\n');
+		}
+		stringBuilder.Append("\nInternet: forward TCP port ").Append(port)
+			.Append(" in your router (and allow it in your firewall), then give other players your public IP address with port ")
+			.Append(port).Append('.');
+		stringBuilder.Append("\n\nDiscovery only works on the local network; on the internet use Direct Connect.");
+		return stringBuilder.ToString();
+	}
+
 	public static string StartHosting()
 	{
 		if (IsActive)
@@ -192,6 +237,91 @@ public static class MultiplayerManager
 		EntityNetRegistry.Reset();
 		s_statusText = DescribeStatus();
 		Log.Information("[Multiplayer] Stopped hosting.");
+	}
+
+	/// <summary>
+	/// Parses a direct-connect target. Accepts "host", "host:port",
+	/// "1.2.3.4:port" and "[ipv6]:port"; a port typed in the separate field is
+	/// used when the address does not contain one.
+	/// </summary>
+	public static bool TryParseAddress(string address, string portText, out string host, out int port, out string error)
+	{
+		host = string.Empty;
+		port = MultiplayerProtocol.DefaultPort;
+		error = null;
+		if (string.IsNullOrWhiteSpace(address))
+		{
+			error = "Type the address of the host.";
+			return false;
+		}
+		string text = address.Trim();
+		bool flag = false;
+		if (text.StartsWith("["))
+		{
+			int num = text.IndexOf(']');
+			if (num < 0)
+			{
+				error = "Invalid IPv6 address.";
+				return false;
+			}
+			host = text.Substring(1, num - 1);
+			string text2 = text.Substring(num + 1);
+			if (text2.Length > 0)
+			{
+				if (!text2.StartsWith(":") || !int.TryParse(text2.Substring(1), out port))
+				{
+					error = "Invalid port after the IPv6 address.";
+					return false;
+				}
+				flag = true;
+			}
+		}
+		else
+		{
+			int num2 = text.LastIndexOf(':');
+			if (num2 > 0 && text.IndexOf(':') == num2)
+			{
+				string text3 = text.Substring(num2 + 1);
+				if (int.TryParse(text3, out int num3))
+				{
+					host = text.Substring(0, num2);
+					port = num3;
+					flag = true;
+				}
+				else
+				{
+					host = text;
+				}
+			}
+			else
+			{
+				host = text;
+			}
+		}
+		if (!flag && !string.IsNullOrWhiteSpace(portText))
+		{
+			if (!int.TryParse(portText.Trim(), out port))
+			{
+				error = "The port must be a number.";
+				return false;
+			}
+		}
+		if (string.IsNullOrEmpty(host))
+		{
+			error = "Type the address of the host.";
+			return false;
+		}
+		if (Uri.CheckHostName(host) == UriHostNameType.Unknown)
+		{
+			error = "\"" + host + "\" is not a valid host name or IP address.";
+			return false;
+		}
+		if (port < 1 || port > 65535)
+		{
+			error = "The port must be between 1 and 65535.";
+			return false;
+		}
+		return true;
 	}
 
 	public static void StartJoin(string address, int port, string playerName)
@@ -321,6 +451,99 @@ public static class MultiplayerManager
 		s_joinTask = null;
 		s_joinResult = null;
 		s_applyingRemoteCell = false;
+	}
+
+	/// <summary>Marks an imported world as a disposable client-side cache.</summary>
+	public static void MarkClientWorldCache(string directoryName)
+	{
+		if (string.IsNullOrEmpty(directoryName))
+		{
+			return;
+		}
+		try
+		{
+			Storage.WriteAllText(Storage.CombinePaths(directoryName, ClientCacheMarkerFileName), "Survivalcraft 2 multiplayer client cache\n");
+		}
+		catch (Exception ex)
+		{
+			Log.Warning("[Multiplayer] Could not mark client world cache: " + ex.Message);
+		}
+	}
+
+	public static bool IsClientWorldCache(string directoryName)
+	{
+		if (string.IsNullOrEmpty(directoryName))
+		{
+			return false;
+		}
+		try
+		{
+			return Storage.FileExists(Storage.CombinePaths(directoryName, ClientCacheMarkerFileName));
+		}
+		catch (Exception)
+		{
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// Removes worlds that were imported by a client and left behind by a crash
+	/// or an abrupt exit. Safe to call whenever no session is running; it is
+	/// invoked before the world list is built so the list never shows duplicates.
+	/// </summary>
+	public static void SweepStaleClientWorlds()
+	{
+		if (IsActive || IsJoining)
+		{
+			return;
+		}
+		IEnumerable<string> enumerable;
+		try
+		{
+			enumerable = Storage.ListDirectoryNames("data:/Worlds");
+		}
+		catch (Exception)
+		{
+			return;
+		}
+		bool flag = false;
+		foreach (string item in enumerable)
+		{
+			string text = Storage.CombinePaths("data:/Worlds", item);
+			if (!IsClientWorldCache(text))
+			{
+				continue;
+			}
+			if (text == s_clientWorldDirectory)
+			{
+				continue;
+			}
+			try
+			{
+				WorldsManager.DeleteWorld(text);
+				flag = true;
+				Log.Information("[Multiplayer] Removed stale client world cache " + text);
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("[Multiplayer] Could not remove stale client world cache " + text + ": " + ex.Message);
+			}
+			if (text == s_worldToDelete)
+			{
+				s_worldToDelete = null;
+			}
+		}
+		if (flag)
+		{
+			try
+			{
+				WorldsManager.UpdateWorldsList();
+			}
+			catch (Exception ex2)
+			{
+				Log.Warning("[Multiplayer] Could not refresh world list: " + ex2.Message);
+			}
+		}
 	}
 
 	public static void Update()
@@ -472,6 +695,7 @@ public static class MultiplayerManager
 		{
 			return;
 		}
+		int cellValue = terrain.Terrain.GetCellValue(x, y, z);
 		s_applyingRemoteCell = true;
 		try
 		{
@@ -480,6 +704,25 @@ public static class MultiplayerManager
 		finally
 		{
 			s_applyingRemoteCell = false;
+		}
+		// Breaking a block on the host destroys it and creates debris there.
+		// The client only receives the new cell value, so it spawns the same
+		// debris locally to keep the break readable.
+		if (Terrain.ExtractContents(value) == 0 && cellValue != 0)
+		{
+			try
+			{
+				SubsystemParticles subsystem = terrain.Project.FindSubsystem<SubsystemParticles>(throwOnError: false);
+				if (subsystem != null)
+				{
+					Block block = BlocksManager.Blocks[Terrain.ExtractContents(cellValue)];
+					subsystem.AddParticleSystem(block.CreateDebrisParticleSystem(terrain, new Vector3(x + 0.5f, y + 0.5f, z + 0.5f), cellValue, 1f));
+				}
+			}
+			catch (Exception ex)
+			{
+				Log.Warning("[Multiplayer] Could not create break particles: " + ex.Message);
+			}
 		}
 	}
 

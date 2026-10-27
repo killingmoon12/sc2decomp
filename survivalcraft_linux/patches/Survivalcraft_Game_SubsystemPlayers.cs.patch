@@ -54,7 +54,38 @@
  	public void RemovePlayerData(PlayerData playerData)
  	{
  		if (!m_playersData.Contains(playerData))
-@@ -119,8 +141,22 @@
+@@ -81,11 +103,27 @@
+ 			throw new InvalidOperationException("Player does not exist.");
+ 		}
+ 		m_playersData.Remove(playerData);
+-		if (playerData.ComponentPlayer != null)
++		// Multiplayer: an entity that is already gone must not stop the player
++		// record from being removed, otherwise the avatar would linger forever.
++		try
+ 		{
+-			Project.RemoveEntity(playerData.ComponentPlayer.Entity, disposeEntity: true);
++			if (playerData.ComponentPlayer != null)
++			{
++				Project.RemoveEntity(playerData.ComponentPlayer.Entity, disposeEntity: true);
++			}
++		}
++		catch (Exception ex)
++		{
++			Log.Warning("Could not remove player entity: " + ex);
++		}
++		try
++		{
++			PlayerRemoved?.Invoke(playerData);
++		}
++		catch (Exception ex2)
++		{
++			Log.Warning("Could not notify player removal: " + ex2);
+ 		}
+-		PlayerRemoved?.Invoke(playerData);
+ 		playerData.Dispose();
+ 	}
+ 
+@@ -119,8 +157,22 @@
  			PlayerData playerData = new PlayerData(Project);
  			playerData.Load((ValuesDictionary)item.Value);
  			playerData.PlayerIndex = int.Parse(item.Key, CultureInfo.InvariantCulture);
@@ -77,7 +108,7 @@
  	}
  
  	protected override void Save(ValuesDictionary valuesDictionary)
-@@ -131,6 +167,13 @@
+@@ -131,6 +183,13 @@
  		valuesDictionary.SetValue("Players", valuesDictionary2);
  		foreach (PlayerData playersDatum in m_playersData)
  		{

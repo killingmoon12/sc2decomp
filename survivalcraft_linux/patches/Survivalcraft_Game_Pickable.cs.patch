@@ -1,0 +1,15 @@
+--- a/Survivalcraft/Game/Pickable.cs
++++ b/Survivalcraft/Game/Pickable.cs
+@@ -4,6 +4,12 @@
+ 
+ public class Pickable : WorldItem
+ {
++	/// <summary>
++	/// Stable identity used by multiplayer replication. Only meaningful on the
++	/// host while a session is running; clients receive it from the host.
++	/// </summary>
++	public int NetId;
++
+ 	public int Count;
+ 
+ 	public Vector3? FlyToPosition;

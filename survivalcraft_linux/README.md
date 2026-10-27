@@ -96,18 +96,22 @@ P/Invokes, which resolve to Mesa's GLES-on-GL layer (`libGLESv2.so.2`), so
 shaders and bindings are unchanged from the Android build. Presenting is done
 with `SDL_GL_SwapWindow`.
 
-## Multiplayer (LAN)
+## Multiplayer (LAN and internet)
 
-The port adds host-authoritative LAN play for up to eight players. The host
-keeps running a normal world and streams it to clients; clients are replicas
-that never simulate the world themselves.
+The port adds host-authoritative multiplayer for up to eight players, over the
+local network or the internet. The host keeps running a normal world and streams
+it to clients; clients are replicas that never simulate the world themselves.
 
 * **Host:** load a world, open the in-game menu (**More**), choose
-  **Open World To LAN**.
-* **Join:** on the `Existing Worlds` screen press **Join LAN**, pick the world
-  and press **Join**.
+  **Open World To Multiplayer**. **Hosting Status** shows the TCP port and the
+  LAN addresses to share.
+* **Join:** on the `Existing Worlds` screen press **Multiplayer**. Pick a
+  discovered LAN game and press **Join Selected**, or type the host's address
+  (and port) and press **Connect**.
 
-Ports: `27020/tcp` for game traffic, `27021/udp` for LAN discovery. Both sides
+Ports: `27020/tcp` for game traffic (LAN and internet), `27021/udp` for LAN
+discovery only. For internet play, forward `27020/tcp` on the host's router and
+share the public IP; the joiner uses **Connect** with that address. Both sides
 must run the same protocol version (same build).
 
 See **[`MULTIPLAYER.md`](MULTIPLAYER.md)** for the architecture, the full wire
@@ -141,11 +145,14 @@ in `prewritten/Engine/` rather than patches.
 | `EntitySystem.Android.Net_GameEntitySystem_Entity.cs` | Persist `MultiplayerNetId` |
 | `EntitySystem.Android.Net_GameEntitySystem_Project.cs` | Apply `EntityNetRegistry.SaveFilter` |
 | `Survivalcraft_Game_PlayerData.cs` | `IsRemote`, replica readiness |
-| `Survivalcraft_Game_SubsystemPlayers.cs` | 8 players, `AddPlayerDataAt`, save filtering |
+| `Survivalcraft_Game_SubsystemPlayers.cs` | 8 players, `AddPlayerDataAt`, save filtering, robust removal |
 | `Survivalcraft_Game_SubsystemGameWidgets.cs` | 8 widgets, detached remote widgets |
 | `Survivalcraft_Game_SubsystemUpdate.cs` | Client simulation freeze |
 | `Survivalcraft_Game_SubsystemTerrain.cs` | Stream block edits |
 | `Survivalcraft_Game_SubsystemGameInfo.cs` | Host-authored game time |
+| `Survivalcraft_Game_SubsystemPickables.cs` | Client-side replica of dropped items |
+| `Survivalcraft_Game_Pickable.cs` | Network id for dropped items |
+| `Survivalcraft_Game_ComponentMiner.cs` | Replicated dig state (cracks + hand swing) |
 | `Survivalcraft_Game_ComponentPlayer.cs` | Client early-out, remote input, look prediction |
 | `Survivalcraft_Game_ComponentInput.cs` | `SetPlayerInput` / `ConsumePlayerInput` |
 | `Survivalcraft_Game_ComponentGui.cs` | No GUI for remote players |
@@ -155,8 +162,8 @@ in `prewritten/Engine/` rather than patches.
 | `Survivalcraft_Game_ComponentLocomotion.cs` | Replicated look angles |
 | `Survivalcraft_Game_GameWidget.cs` | Input devices per role |
 | `Survivalcraft_Game_GameManager.cs` | Multiplayer lifecycle hooks |
-| `Survivalcraft_Game_GameMenuDialog.cs` | Host / stop / status entries |
-| `Survivalcraft_Game_PlayScreen.cs` | `Join LAN` button |
+| `Survivalcraft_Game_GameMenuDialog.cs` | Host / stop / status entries, host addresses |
+| `Survivalcraft_Game_PlayScreen.cs` | Multiplayer button, stale cache sweep |
 | `Survivalcraft_Game_ScreensManager.cs` | Register the multiplayer screen |
 
 ## Requirements

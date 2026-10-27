@@ -13,9 +13,9 @@ using GameEntitySystem;
 namespace Game;
 
 /// <summary>
-/// Host side of a LAN session. Simulates nothing itself: it relies on the normal
-/// single-player simulation of the host world and mirrors the results to the
-/// connected clients.
+/// Host side of a multiplayer session. Simulates nothing itself: it relies on
+/// the normal single-player simulation of the host world and mirrors the
+/// results to the connected clients.
 /// </summary>
 public sealed class MultiplayerServer : IDisposable
 {
@@ -77,6 +77,8 @@ public sealed class MultiplayerServer : IDisposable
 
 	private readonly SubsystemWeather m_subsystemWeather;
 
+	private readonly SubsystemPickables m_subsystemPickables;
+
 	private readonly string m_hostName;
 
 	private readonly ConcurrentQueue<KeyValuePair<ClientSlot, NetChannel.Frame>> m_inbox = new ConcurrentQueue<KeyValuePair<ClientSlot, NetChannel.Frame>>();
@@ -103,6 +105,10 @@ public sealed class MultiplayerServer : IDisposable
 
 	private double m_lastInventorySyncTime;
 
+	private double m_lastMiningStateTime;
+
+	private double m_lastPickableSyncTime;
+
 	private int m_port;
 
 	public int Port => m_port;
@@ -118,7 +124,7 @@ public sealed class MultiplayerServer : IDisposable
 		get
 		{
 			int num = 0;
-			foreach (ClientSlot client in m_clients)
+			foreach (ClientSlot client in SnapshotClients())
 			{
 				if (client.Ready && !client.Disconnected)
 				{
@@ -139,6 +145,7 @@ public sealed class MultiplayerServer : IDisposable
 		m_subsystemGameInfo = project.FindSubsystem<SubsystemGameInfo>(throwOnError: true);
 		m_subsystemTimeOfDay = project.FindSubsystem<SubsystemTimeOfDay>(throwOnError: true);
 		m_subsystemWeather = project.FindSubsystem<SubsystemWeather>(throwOnError: true);
+		m_subsystemPickables = project.FindSubsystem<SubsystemPickables>(throwOnError: true);
 	}
 
 	public void Start()
@@ -183,6 +190,7 @@ public sealed class MultiplayerServer : IDisposable
 				Socket socket = m_listener.AcceptSocket();
 				ClientSlot clientSlot = new ClientSlot();
 				clientSlot.ConnectTime = Time.RealTime;
+				clientSlot.LastInputTime = Time.RealTime;
 				clientSlot.Channel = new NetChannel(socket, "Multiplayer Client");
 				clientSlot.Channel.MessageReceived += delegate(NetChannel.Frame frame)
 				{
@@ -256,6 +264,16 @@ public sealed class MultiplayerServer : IDisposable
 			m_lastInventorySyncTime = realTime;
 			SyncBlockInventories();
 		}
+		if (realTime - m_lastMiningStateTime >= MultiplayerManager.MiningStateInterval)
+		{
+			m_lastMiningStateTime = realTime;
+			SyncMiningStates();
+		}
+		if (realTime - m_lastPickableSyncTime >= MultiplayerManager.PickableSyncInterval)
+		{
+			m_lastPickableSyncTime = realTime;
+			SyncPickables();
+		}
 	}
 
 	/// <summary>
@@ -265,7 +283,7 @@ public sealed class MultiplayerServer : IDisposable
 	/// </summary>
 	private void UpdateRemotePlayerTerrain()
 	{
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (client.Disconnected || client.PlayerData == null)
 			{
@@ -296,7 +314,7 @@ public sealed class MultiplayerServer : IDisposable
 		{
 			return;
 		}
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (client.Disconnected || !client.Ready || client == except)
 			{
@@ -305,6 +323,66 @@ public sealed class MultiplayerServer : IDisposable
 			client.Channel.Send(MultiplayerMessage.BlockInventory, delegate(EngineBinaryWriter writer)
 			{
 				MultiplayerInventorySync.Write(writer, records);
+			});
+		}
+	}
+
+	private void SyncMiningStates()
+	{
+		foreach (ClientSlot client in SnapshotClients())
+		{
+			if (client.Disconnected || !client.Ready)
+			{
+				continue;
+			}
+			client.Channel.Send(MultiplayerMessage.MiningState, delegate(EngineBinaryWriter writer)
+			{
+				writer.Write(m_subsystemPlayers.PlayersData.Count);
+				foreach (PlayerData playersDatum in m_subsystemPlayers.PlayersData)
+				{
+					writer.Write(playersDatum.PlayerIndex);
+					ComponentPlayer componentPlayer = playersDatum.ComponentPlayer;
+					if (componentPlayer == null)
+					{
+						writer.Write(false);
+						continue;
+					}
+					writer.Write(true);
+					ComponentMiner componentMiner = componentPlayer.ComponentMiner;
+					CellFace? digCellFace = componentMiner.DigCellFace;
+					writer.Write(digCellFace.HasValue);
+					if (digCellFace.HasValue)
+					{
+						writer.Write(digCellFace.Value.X);
+						writer.Write(digCellFace.Value.Y);
+						writer.Write(digCellFace.Value.Z);
+						writer.Write(digCellFace.Value.Face);
+					}
+					writer.Write(componentMiner.DigProgress);
+					writer.Write(componentMiner.DigTime);
+					writer.Write(componentMiner.PokingPhase);
+				}
+			});
+		}
+	}
+
+	/// <summary>
+	/// Pickables are not entities, so they cannot ride on the entity sync. The
+	/// host publishes the item stacks near each client and the client replaces
+	/// its own list with it.
+	/// </summary>
+	private void SyncPickables()
+	{
+		foreach (ClientSlot client in SnapshotClients())
+		{
+			if (client.Disconnected || !client.Ready)
+			{
+				continue;
+			}
+			Vector3 clientCenter = GetClientCenter(client);
+			client.Channel.Send(MultiplayerMessage.Pickables, delegate(EngineBinaryWriter writer)
+			{
+				MultiplayerPickables.Write(writer, m_subsystemPickables, clientCenter, MultiplayerManager.PickableSyncDistanceSquared);
 			});
 		}
 	}
@@ -525,6 +603,7 @@ public sealed class MultiplayerServer : IDisposable
 			return;
 		}
 		slot.Ready = true;
+		slot.LastInputTime = Time.RealTime;
 		foreach (CellChange pendingCell in slot.PendingCells)
 		{
 			SendCellChange(slot, pendingCell);
@@ -555,7 +634,7 @@ public sealed class MultiplayerServer : IDisposable
 
 	private void ApplyClientInputs()
 	{
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (client.Disconnected || client.PlayerData == null)
 			{
@@ -584,9 +663,18 @@ public sealed class MultiplayerServer : IDisposable
 			{
 				continue;
 			}
-			if (!client.Ready && client.SnapshotSent && realTime - client.ConnectTime > 120.0)
+			if (!client.Ready)
 			{
-				DisconnectClient(client, "Timed out while loading the world.");
+				if (client.SnapshotSent && realTime - client.ConnectTime > 120.0)
+				{
+					DisconnectClient(client, "Timed out while loading the world.");
+				}
+			}
+			else if (realTime - client.LastInputTime > MultiplayerManager.ClientInputTimeout)
+			{
+				// A crashed or killed client never closes its connection. The
+				// input stream is the liveness signal instead.
+				DisconnectClient(client, "Timed out (no input from client).");
 			}
 		}
 	}
@@ -614,7 +702,7 @@ public sealed class MultiplayerServer : IDisposable
 		item.Z = z;
 		item.Value = value;
 		m_pendingCells.Add(item);
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (!client.Disconnected && !client.Ready && client.SnapshotSent)
 			{
@@ -631,7 +719,7 @@ public sealed class MultiplayerServer : IDisposable
 		}
 		List<CellChange> list = new List<CellChange>(m_pendingCells);
 		m_pendingCells.Clear();
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (client.Disconnected || !client.Ready)
 			{
@@ -675,7 +763,7 @@ public sealed class MultiplayerServer : IDisposable
 		{
 			dictionary[EntityNetRegistry.GetOrCreateId(item)] = item;
 		}
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (client.Disconnected || !client.Ready)
 			{
@@ -828,7 +916,7 @@ public sealed class MultiplayerServer : IDisposable
 
 	private void SyncPlayerStates()
 	{
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (client.Disconnected || !client.Ready)
 			{
@@ -882,7 +970,7 @@ public sealed class MultiplayerServer : IDisposable
 		float timeOfYear = m_subsystemGameInfo.WorldSettings.TimeOfYear;
 		bool precipitation = m_subsystemWeather.IsPrecipitationStarted;
 		bool fog = m_subsystemWeather.IsFogStarted;
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (client.Disconnected || !client.Ready)
 			{
@@ -906,7 +994,7 @@ public sealed class MultiplayerServer : IDisposable
 		{
 			list.Add(new Tuple<int, string, bool>(playersDatum.PlayerIndex, playersDatum.Name, playersDatum.IsRemote));
 		}
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (!client.Disconnected && client.Ready)
 			{
@@ -930,7 +1018,7 @@ public sealed class MultiplayerServer : IDisposable
 		{
 			return;
 		}
-		foreach (ClientSlot client in m_clients)
+		foreach (ClientSlot client in SnapshotClients())
 		{
 			if (!client.Disconnected && client.Ready)
 			{
@@ -957,25 +1045,49 @@ public sealed class MultiplayerServer : IDisposable
 		catch (Exception)
 		{
 		}
-		if (slot.PlayerData != null)
+		PlayerData playerData = slot.PlayerData;
+		slot.PlayerData = null;
+		if (playerData != null)
 		{
-			string name = slot.PlayerData.Name;
+			string name = playerData.Name;
+			bool flag = false;
 			try
 			{
-				m_subsystemTerrain.TerrainUpdater.RemoveUpdateLocation(slot.PlayerData.PlayerIndex);
+				flag = m_subsystemPlayers.PlayersData.Contains(playerData);
 			}
 			catch (Exception)
 			{
 			}
 			try
 			{
-				m_subsystemPlayers.RemovePlayerData(slot.PlayerData);
+				m_subsystemTerrain.TerrainUpdater.RemoveUpdateLocation(playerData.PlayerIndex);
+			}
+			catch (Exception)
+			{
+			}
+			try
+			{
+				if (flag)
+				{
+					m_subsystemPlayers.RemovePlayerData(playerData);
+				}
 			}
 			catch (Exception ex)
 			{
-				Log.Warning("[Multiplayer] Could not remove player: " + ex.Message);
+				Log.Warning("[Multiplayer] Could not remove player: " + ex);
 			}
-			slot.PlayerData = null;
+			// The removal above is defensive: if the player record survived for
+			// any reason it must not be left in the world forever.
+			try
+			{
+				if (m_subsystemPlayers.PlayersData.Contains(playerData))
+				{
+					Log.Error("[Multiplayer] Player \"" + name + "\" is still in the world after disconnecting.");
+				}
+			}
+			catch (Exception)
+			{
+			}
 			BroadcastChat(null, name + " left the game");
 			BroadcastPlayerList();
 		}

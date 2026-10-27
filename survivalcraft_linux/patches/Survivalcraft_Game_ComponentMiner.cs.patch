@@ -1,0 +1,22 @@
+--- a/Survivalcraft/Game/ComponentMiner.cs
++++ b/Survivalcraft/Game/ComponentMiner.cs
+@@ -105,6 +105,19 @@
+ 		}
+ 	}
+ 
++	/// <summary>
++	/// Applies the host's digging state to a client replica. The client does not
++	/// run <see cref="Update"/>, so without this the crack overlay and the hand
++	/// swing animation would never be visible.
++	/// </summary>
++	public void SetNetDigState(CellFace? cellFace, float digProgress, float digTime, float pokingPhase)
++	{
++		DigCellFace = cellFace;
++		m_digProgress = digProgress;
++		m_digStartTime = m_subsystemTime.GameTime - digTime;
++		PokingPhase = pokingPhase;
++	}
++
+ 	public bool Dig(TerrainRaycastResult raycastResult)
+ 	{
+ 		bool result = false;

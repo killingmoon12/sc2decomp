@@ -1,0 +1,51 @@
+--- a/Survivalcraft/Game/SubsystemPickables.cs
++++ b/Survivalcraft/Game/SubsystemPickables.cs
+@@ -85,6 +85,48 @@
+ 		return pickable;
+ 	}
+ 
++	/// <summary>
++	/// Replaces the local (client-side) pickables with the list published by the
++	/// host. Instances with a matching network id are updated in place so the
++	/// drawing code keeps a stable list.
++	/// </summary>
++	public void ApplyNetPickables(List<Pickable> pickables)
++	{
++		Dictionary<int, Pickable> dictionary = new Dictionary<int, Pickable>();
++		foreach (Pickable pickable in m_pickables)
++		{
++			if (pickable.NetId != 0)
++			{
++				dictionary[pickable.NetId] = pickable;
++			}
++		}
++		List<Pickable> list = new List<Pickable>();
++		if (pickables != null)
++		{
++			foreach (Pickable pickable2 in pickables)
++			{
++				if (dictionary.TryGetValue(pickable2.NetId, out Pickable value))
++				{
++					value.Value = pickable2.Value;
++					value.Count = pickable2.Count;
++					value.Position = pickable2.Position;
++					value.Velocity = pickable2.Velocity;
++					value.CreationTime = pickable2.CreationTime;
++					value.StuckMatrix = pickable2.StuckMatrix;
++					value.ToRemove = false;
++					list.Add(value);
++				}
++				else
++				{
++					list.Add(pickable2);
++				}
++			}
++		}
++		m_pickables.Clear();
++		m_pickablesToRemove.Clear();
++		m_pickables.AddRange(list);
++	}
++
+ 	public void Draw(Camera camera, int drawOrder)
+ 	{
+ 		double totalElapsedGameTime = m_subsystemGameInfo.TotalElapsedGameTime;

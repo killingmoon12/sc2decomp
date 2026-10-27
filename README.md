@@ -27,8 +27,11 @@ dotnet Survivalcraft.dll
 ```
 
 ## Multiplayer
-The Linux port supports LAN play: open a loaded world to the LAN from the
-in-game menu, and join with the **Join LAN** button on the worlds screen.
+The Linux port supports host-authoritative multiplayer over both the local
+network and the internet for up to eight players. Open a loaded world to other
+players from the in-game menu, then join from the **Multiplayer** button on the
+worlds screen — either from the LAN discovery list or by typing the host's
+address and port (after forwarding `27020/tcp` on the host router).
 See [`survivalcraft_linux/MULTIPLAYER.md`](survivalcraft_linux/MULTIPLAYER.md)
 for design, protocol, ports, testing and known limitations.
 

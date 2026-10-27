@@ -28,13 +28,15 @@ public enum MultiplayerMessage : byte
 	Ping = 16,
 	Pong = 17,
 	BlockInventory = 18,
-	PlayerInventory = 19
+	PlayerInventory = 19,
+	MiningState = 20,
+	Pickables = 21
 }
 
 public static class MultiplayerProtocol
 {
 	/// <summary>Bumped whenever the wire format changes incompatibly.</summary>
-	public const int Version = 1;
+	public const int Version = 2;
 
 	/// <summary>TCP port the host listens on by default.</summary>
 	public const int DefaultPort = 27020;
@@ -92,7 +94,7 @@ public static class MultiplayerProtocol
 	}
 }
 
-/// <summary>Description of a LAN game, produced by discovery or by the host itself.</summary>
+/// <summary>Description of a discovered game on the local network.</summary>
 public class MultiplayerGameInfo
 {
 	public string Address = string.Empty;

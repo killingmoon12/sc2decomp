@@ -223,6 +223,41 @@ public static class MultiplayerDiscovery
 		}
 	}
 
+	/// <summary>IPv4 addresses other machines on the same network can use to reach this host.</summary>
+	public static List<string> GetLocalAddresses()
+	{
+		List<string> list = new List<string>();
+		try
+		{
+			foreach (NetworkInterface networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+			{
+				if (networkInterface.OperationalStatus != OperationalStatus.Up || networkInterface.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+				{
+					continue;
+				}
+				foreach (UnicastIPAddressInformation unicastAddress in networkInterface.GetIPProperties().UnicastAddresses)
+				{
+					if (unicastAddress.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(unicastAddress.Address))
+					{
+						string text = unicastAddress.Address.ToString();
+						if (!list.Contains(text))
+						{
+							list.Add(text);
+						}
+					}
+				}
+			}
+		}
+		catch (Exception)
+		{
+		}
+		if (list.Count == 0)
+		{
+			list.Add("127.0.0.1");
+		}
+		return list;
+	}
+
 	private static List<IPAddress> GetBroadcastAddresses()
 	{
 		List<IPAddress> list = new List<IPAddress>();

@@ -13,8 +13,8 @@ using TemplatesDatabase;
 namespace Game;
 
 /// <summary>
-/// Client side of a LAN session. The host owns the world; this class only applies
-/// the state it receives and forwards the local player input.
+/// Client side of a multiplayer session. The host owns the world; this class
+/// only applies the state it receives and forwards the local player input.
 /// </summary>
 public sealed class MultiplayerClient
 {
@@ -78,6 +78,8 @@ public sealed class MultiplayerClient
 
 	private readonly SubsystemWeather m_subsystemWeather;
 
+	private readonly SubsystemPickables m_subsystemPickables;
+
 	private PlayerInput m_lastInput;
 
 	private bool m_hasInput;
@@ -125,6 +127,7 @@ public sealed class MultiplayerClient
 		m_subsystemGameInfo = project.FindSubsystem<SubsystemGameInfo>(throwOnError: true);
 		m_subsystemTimeOfDay = project.FindSubsystem<SubsystemTimeOfDay>(throwOnError: true);
 		m_subsystemWeather = project.FindSubsystem<SubsystemWeather>(throwOnError: true);
+		m_subsystemPickables = project.FindSubsystem<SubsystemPickables>(throwOnError: true);
 		PlayerCount = m_subsystemPlayers.PlayersData.Count;
 	}
 
@@ -327,6 +330,12 @@ public sealed class MultiplayerClient
 		case MultiplayerMessage.BlockInventory:
 			MultiplayerInventorySync.ReadAndApply(m_project, engineBinaryReader);
 			break;
+		case MultiplayerMessage.MiningState:
+			ReadMiningStates(engineBinaryReader);
+			break;
+		case MultiplayerMessage.Pickables:
+			MultiplayerPickables.ReadAndApply(engineBinaryReader, m_subsystemPickables);
+			break;
 		case MultiplayerMessage.Ping:
 			m_channel.Send(MultiplayerMessage.Pong, null);
 			break;
@@ -485,6 +494,39 @@ public sealed class MultiplayerClient
 		{
 			m_states.Remove(netId);
 			m_project.RemoveEntity(entity, disposeEntity: true);
+		}
+	}
+
+	/// <summary>
+	/// Applies the host's digging/animation state. The client never runs
+	/// <see cref="ComponentMiner.Update"/>, so this is what makes the crack
+	/// overlay and the hand swing visible.
+	/// </summary>
+	private void ReadMiningStates(EngineBinaryReader reader)
+	{
+		int num = reader.ReadInt32();
+		if (num < 0 || num > MultiplayerManager.MaxPlayers * 8)
+		{
+			throw new InvalidOperationException("Invalid mining state count " + num + ".");
+		}
+		for (int i = 0; i < num; i++)
+		{
+			int num2 = reader.ReadInt32();
+			if (!reader.ReadBoolean())
+			{
+				continue;
+			}
+			CellFace? cellFace = null;
+			if (reader.ReadBoolean())
+			{
+				cellFace = new CellFace(reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32(), reader.ReadInt32());
+			}
+			float digProgress = reader.ReadSingle();
+			float digTime = reader.ReadSingle();
+			float pokingPhase = reader.ReadSingle();
+			PlayerData playerData = m_subsystemPlayers.PlayersData.FirstOrDefault((PlayerData p) => p.PlayerIndex == num2);
+			ComponentPlayer componentPlayer = playerData?.ComponentPlayer;
+			componentPlayer?.ComponentMiner.SetNetDigState(cellFace, digProgress, digTime, pokingPhase);
 		}
 	}
 
@@ -850,10 +892,20 @@ public sealed class MultiplayerClient
 			}
 			Log.Information("[Multiplayer] Downloaded world snapshot from {0} ({1} KiB)", address, snapshot.Length / 1024);
 			string text3 = WorldsManager.ImportWorld(snapshot);
+			// Remember that this world is only a cache: if the game crashes
+			// while playing, the next world-list refresh deletes it.
+			MultiplayerManager.MarkClientWorldCache(text3);
 			WorldsManager.UpdateWorldsList();
 			WorldInfo worldInfo = WorldsManager.GetWorldInfo(text3);
 			if (worldInfo == null)
 			{
+				try
+				{
+					WorldsManager.DeleteWorld(text3);
+				}
+				catch (Exception)
+				{
+				}
 				return MultiplayerJoinResult.Failed("The downloaded world could not be read.");
 			}
 			NetChannel netChannel = new NetChannel(tcpClient.Client, "Multiplayer Host");

@@ -50,6 +50,19 @@ public sealed class NetChannel : IDisposable
 	{
 		m_socket = socket;
 		m_socket.NoDelay = true;
+		try
+		{
+			// Detect clients that vanish without closing the connection (power
+			// loss, killed process). The input watchdog in the server is the
+			// primary mechanism; keepalive makes the socket fail as well.
+			m_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, optionValue: true);
+			m_socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveTime, 10);
+			m_socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 5);
+			m_socket.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);
+		}
+		catch (Exception)
+		{
+		}
 		m_stream = new NetworkStream(socket, ownsSocket: false);
 		m_readerThread = new Thread(ReadLoop)
 		{

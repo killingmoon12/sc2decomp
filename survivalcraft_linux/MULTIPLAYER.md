@@ -1,8 +1,9 @@
-# LAN Multiplayer
+# Multiplayer (LAN and internet)
 
-Survivalcraft 2 Linux can host a world on the local network and let up to eight
-players join it. The host keeps simulating a completely normal single-player
-world; every other machine is a *replica* that mirrors the state it is sent.
+Survivalcraft 2 Linux can host a world for up to eight players, both on the
+local network and over the internet. The host keeps simulating a completely
+normal single-player world; every other machine is a *replica* that mirrors the
+state it is sent.
 
 This document explains how to use it, how it works, and how to hack on it.
 
@@ -11,40 +12,47 @@ This document explains how to use it, how it works, and how to hack on it.
 ## Playing
 
 Both machines must run the same build (`MultiplayerProtocol.Version` has to
-match) and be on the same LAN.
+match).
 
 ### Host
 
 1. Load a world normally (`Play` -> select a world -> `Play!`).
 2. Open the in-game menu (the **More** button at the bottom of the HUD).
-3. Choose **Open World To LAN**. The menu bar now reads
+3. Choose **Open World To Multiplayer**. The menu bar now reads
    `Multiplayer: Hosting on port 27020 (n/8 players)`.
+4. **Hosting Status** lists the addresses other players can use and the port.
+   For internet play, forward that TCP port on the router (and allow it in the
+   firewall), then share the router's public IP address.
 
 The host keeps playing exactly as in single player. Client avatars are ordinary
 entities in the host's world, driven by the input the host receives.
 
 ### Join
 
-1. On the `Existing Worlds` screen press **Join LAN**.
-2. Pick the world from the list (it refreshes every 1.5 s), type a name, press
-   **Join**.
-3. The client downloads a full world snapshot, imports it as a normal world and
+1. On the `Existing Worlds` screen press **Multiplayer**.
+2. **LAN:** pick the world from the discovery list, type a name, press
+   **Join Selected**. The list refreshes every 1.5 s.
+3. **Internet (or any address):** type the host's address and port in the
+   `Address` / `Port` fields and press **Connect**. `host`, `host:port`,
+   `1.2.3.4:port`, `[::1]:port` are all accepted; the separate port field is
+   used when the address does not include one.
+4. The client downloads a full world snapshot, imports it as a normal world and
    loads it, then starts mirroring the host.
 
 To leave, quit the world as usual. The imported world is a cache and is deleted
-automatically.
+automatically; if the game is killed instead, the leftover cache is removed the
+next time a world list is shown.
 
 ### Network ports
 
 | Port | Protocol | Purpose |
 |------|----------|---------|
-| 27020 | TCP | Game traffic (framed, reliable, ordered) |
+| 27020 | TCP | Game traffic (framed, reliable, ordered), LAN and internet |
 | 27021 | UDP | LAN discovery (broadcast query / unicast reply) |
 
-`27020/tcp` must be reachable on the host for LAN play; `27021/udp` only makes
-the host show up in the browser. A host can always be joined by typing its
-address, but the current UI only lists discovered games, so open the UDP port or
-add the address manually in code while debugging.
+Only `27020/tcp` is needed to play. `27021/udp` merely makes the host show up in
+the LAN browser; it is not usable across the internet. The host binds
+`IPAddress.Any`, so a forwarded port works without further configuration.
 
 Discovery is deliberately boring: the client broadcasts `SC2MP_DISCOVER_V1` to
 the broadcast address of every IPv4 interface (plus `255.255.255.255` and
@@ -55,6 +63,10 @@ SC2MP_HOST_V1|<world>|<host>|<tcpPort>|<players>|<maxPlayers>|<protocolVersion>
 ```
 
 Entries that have not been seen for 5 s are dropped.
+
+> **Internet safety:** there is no authentication or encryption yet (see
+> limitations). Only forward the port to players you trust, and stop hosting
+> when you are done.
 
 ---
 
@@ -174,6 +186,8 @@ client and flushed when it becomes ready, so no edit is lost.
 | Entity creation / removal | host -> client | on change | `EntityAdd` / `EntityRemove` |
 | Block edits | both ways | per frame, batched | `CellChange` |
 | Player list, name, level, health, needs, inventory | host -> client | 5 Hz | `PlayerState` |
+| Dig cell / progress / hand-swing phase | host -> client | 30 Hz | `MiningState` |
+| Dropped item stacks | host -> client | 10 Hz | `Pickables` |
 | Player list changes | host -> client | on change | `PlayerJoined` |
 | World time / weather state | host -> client | 2 s | `TimeSync` |
 | Block-entity inventories | both ways | 1 Hz diff | `BlockInventory` |
@@ -190,6 +204,32 @@ Entity adds are applied to the client's `Project`; the host polls
 streams entities near the client (players always, everything else within 384
 blocks). Entities that were already in the snapshot are not sent again: the host
 records the snapshot's net ids per client when it saves the world.
+
+### Mining and item drops
+
+The client never runs `ComponentMiner.Update`, so it cannot derive the crack
+overlay or the first-person hand swing by itself. The host therefore publishes,
+for every player, the current `DigCellFace`, `DigProgress`, `DigTime` and
+`PokingPhase`; `ComponentMiner.SetNetDigState` stores them and the normal
+`ComponentDiggingCracks` / `ComponentFirstPersonModel` drawing code does the
+rest. `CellChange` also lets the client spawn the same block-debris particles
+locally when a block is destroyed.
+
+Item drops are **not entities** in Survivalcraft: `SubsystemPickables` keeps
+them in a plain list. The host serializes the pickables within 96 blocks of each
+client (value, count, position, creation time, stuck matrix) with a stable
+`Pickable.NetId`, and `SubsystemPickables.ApplyNetPickables` replaces the
+client's list with it. The client's pickable *simulation* is skipped, but its
+drawing still runs, so stacks appear, move and disappear in sync with the host.
+
+### Liveness and disconnects
+
+Clients send input on every frame (30 Hz) even while standing still or while the
+window is unfocused. A ready client that has not sent input for 10 s is dropped
+by `CheckTimeouts`, which covers killed processes and alt-F4 that never close
+the socket. TCP keepalive is enabled as a second signal. `DisconnectClient` also
+removes the host-side `PlayerData` defensively, so a failed entity removal can
+never leave a ghost player in the world.
 
 ### Inventories
 
@@ -254,8 +294,10 @@ writes `Hello` and then reads frames until it gets `Snapshot` or `Disconnect`.
 | 17 | `Pong` | - | reserved |
 | 18 | `BlockInventory` | both | count, then per inventory: net id, active slot, slot count, (value, count) pairs |
 | 19 | `PlayerInventory` | C -> H | player index, active slot, slot count, (value, count) pairs |
+| 20 | `MiningState` | H -> C | count, then per player: index, present flag, dig-face flag, face (x, y, z, face), progress, dig time, poke phase |
+| 21 | `Pickables` | H -> C | count, then per stack: net id, value, count, position, creation time, stuck flag (+ matrix) |
 
-`Version` is currently **1**. Bump it whenever a payload changes: hosts reject
+`Version` is currently **2**. Bump it whenever a payload changes: hosts reject
 clients with a different version instead of misparsing them.
 
 ---
@@ -270,12 +312,13 @@ All of this is compiled into the game assembly from `prewritten/Multiplayer/`
 | `MultiplayerProtocol.cs` | message ids, version, ports, discovery strings, `PlayerInput`/ray serialization helpers |
 | `MultiplayerConnection.cs` | `NetChannel`: framed TCP transport, reader/writer threads |
 | `MultiplayerDiscovery.cs` | UDP announcer on the host, probe + game list on the client |
-| `MultiplayerManager.cs` | facade: role, lifecycle, client-freeze allowlist, local look prediction, cell-edit hooks, cached-world cleanup |
-| `MultiplayerServer.cs` | accept loop, handshake, snapshot, entity/cell/player/time/inventory sync, timeouts |
+| `MultiplayerManager.cs` | facade: role, lifecycle, client-freeze allowlist, local look prediction, cell-edit hooks, cached-world sweep |
+| `MultiplayerServer.cs` | accept loop, handshake, snapshot, entity/cell/player/time/inventory/mining/pickable sync, timeouts |
 | `MultiplayerClient.cs` | handshake + download, message application, input accumulation, player-list reconciliation, inventory forwarding |
 | `MultiplayerEntities.cs` | template deep-copy, player entity creation, entity XML (de)serialization |
 | `MultiplayerInventorySync.cs` | block-entity inventory diffing, encoding and applying |
-| `MultiplayerScreen.cs` | `Join LAN` browser (discovery list, name box) |
+| `MultiplayerPickables.cs` | dropped item stack replication and net ids |
+| `MultiplayerScreen.cs` | join screen: LAN discovery list, direct-connect address/port, name box |
 | `prewritten/EntitySystem/EntityNetRegistry.cs` | stable net ids, `Enabled`, `SaveFilter` |
 
 Patches under `patches/` hook this into the decompiled game:
@@ -287,11 +330,14 @@ Patches under `patches/` hook this into the decompiled game:
 | `Survivalcraft_Game_ComponentInput.cs` | `SetPlayerInput`, `ConsumePlayerInput`; desktop starts in mouse mode; client submits input |
 | `Survivalcraft_Game_ComponentPlayer.cs` | client early-out, remote input consumption, client look prediction |
 | `Survivalcraft_Game_PlayerData.cs` | `IsRemote`, replica readiness, no state machine on clients, no spawn dialog for remote players |
-| `Survivalcraft_Game_SubsystemPlayers.cs` | 8 players, `AddPlayerDataAt`, remote marking on load, save filtering |
+| `Survivalcraft_Game_SubsystemPlayers.cs` | 8 players, `AddPlayerDataAt`, remote marking on load, save filtering, robust removal |
 | `Survivalcraft_Game_SubsystemGameWidgets.cs` | 8 widgets, detached remote widgets |
 | `Survivalcraft_Game_SubsystemUpdate.cs` | `MultiplayerManager.SkipUpdate` |
 | `Survivalcraft_Game_SubsystemTerrain.cs` | stream `ChangeCell` edits |
 | `Survivalcraft_Game_SubsystemGameInfo.cs` | `SetNetTotalElapsedGameTime` |
+| `Survivalcraft_Game_SubsystemPickables.cs` | Client-side replacement of dropped items |
+| `Survivalcraft_Game_Pickable.cs` | Stable `NetId` for dropped items |
+| `Survivalcraft_Game_ComponentMiner.cs` | `SetNetDigState` (cracks + hand swing) |
 | `Survivalcraft_Game_ComponentGui.cs` | no GUI input/widgets for remote players |
 | `Survivalcraft_Game_ComponentHealth.cs` | `SetNetHealth` |
 | `Survivalcraft_Game_ComponentVitalStats.cs` | `SetNetVitals` |
@@ -299,8 +345,8 @@ Patches under `patches/` hook this into the decompiled game:
 | `Survivalcraft_Game_ComponentLocomotion.cs` | `AddLookAngles` / `SetLookAngles` |
 | `Survivalcraft_Game_GameWidget.cs` | remote players get no input device; local client player gets all devices |
 | `Survivalcraft_Game_GameManager.cs` | `OnProjectLoaded` / `OnProjectDisposing` / per-frame `Update` |
-| `Survivalcraft_Game_GameMenuDialog.cs` | LAN status line, host/stop/status menu entries |
-| `Survivalcraft_Game_PlayScreen.cs` | `Join LAN` button |
+| `Survivalcraft_Game_GameMenuDialog.cs` | multiplayer status/host/stop entries, LAN addresses and port |
+| `Survivalcraft_Game_PlayScreen.cs` | `Multiplayer` button, stale client-cache sweep |
 | `Survivalcraft_Game_ScreensManager.cs` | register the `Multiplayer` screen |
 
 The remaining patches in `patches/` are the desktop port (device info, storage,
@@ -349,17 +395,21 @@ broadcast list).
 
 Minimum checklist:
 
-- [ ] Host opens a world to LAN; the status line shows the port.
-- [ ] Client joins; the world looks like the host's (terrain, time of day).
+- [ ] Host opens a world to multiplayer; **Hosting Status** shows the port and LAN addresses.
+- [ ] Client joins through the discovery list; its world looks like the host's (terrain, time of day).
+- [ ] Client joins through **Connect** with `127.0.0.1` and with the LAN address.
 - [ ] Both players see each other move, look around and animate.
 - [ ] Client digs/places blocks; the host sees the edit immediately.
-- [ ] Host digs/places blocks; the client sees the edit.
+- [ ] Host digs/places blocks; the client sees cracks, break particles and hand swing.
+- [ ] Dropped items appear, move and disappear on both sides.
 - [ ] Client takes damage / eats / sleeps; the host sees health and needs.
 - [ ] Item moves in the client's inventory persist on the host and on other clients.
 - [ ] A chest edited by one player is visible to the others.
 - [ ] A second client joining later works (snapshot + player list reconciliation).
 - [ ] Disconnecting a client removes its avatar and the others keep playing.
+- [ ] Killing a client process removes its avatar on the host within about 10 s.
 - [ ] Leaving the world deletes the cached client world from the world list.
+- [ ] Killing a client process and starting the game again does not leave duplicate worlds.
 
 Logs: `~/.config/Survivalcraft2/Logs/Game.log`, lines prefixed `[Multiplayer]`.
 
@@ -381,13 +431,17 @@ These are deliberate for the first version, not bugs to rediscover:
   joining during heavy play pauses the host briefly. The snapshot is written
   from the live world, so the host's save file briefly contains the avatars of
   connected clients; the next regular save drops them again.
-* **No authentication or encryption.** The protocol trusts every peer on the
-  LAN; a modified client can send arbitrary block edits, positions or inventory
-  contents. Do not expose port 27020 to the internet.
+* **No authentication or encryption.** The protocol trusts every peer; a
+  modified client can send arbitrary block edits, positions or inventory
+  contents. For internet play, forward only the TCP port to players you trust
+  and stop hosting when you are done.
 * **No dedicated server**; the host must be a player with the world loaded.
 * **`Ping`/`Pong` and `PlayerLeft` are reserved** and currently unused.
 * **Interpolation is simple lerp**, so a client on a lossy/high-latency link
   will see some rubber-banding of remote bodies.
+* **Client world caches** are marked with `MultiplayerCache.txt` inside the
+  imported world directory. They are deleted on a normal exit and swept on the
+  next world-list refresh after a crash.
 
 ---
 
