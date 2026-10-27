@@ -49,17 +49,13 @@ mkdir -p "$SRC_DIR"
 rsync -a --delete "$DECOMP_DIR/EntitySystem.Android.Net/" "$SRC_DIR/EntitySystem.Android.Net/"
 rsync -a --delete "$DECOMP_DIR/Engine/" "$SRC_DIR/Engine/"
 rsync -a --delete "$DECOMP_DIR/Survivalcraft/" "$SRC_DIR/Survivalcraft/"
-rsync -a --delete "$DECOMP_DIR/OpenTK-1.0/" "$SRC_DIR/OpenTK-1.0/"
+
+# The port no longer builds OpenTK at all; drop any tree left over from older
+# builds so nothing stale can leak into the compile.
+rm -rf "$SRC_DIR/OpenTK-1.0"
 
 # Copy content pak
 cp "$DECOMP_DIR/Survivalcraft/Game.Content.pak" "$SRC_DIR/Survivalcraft/"
-
-# ---------------------------------------------------------------------------
-# Linux platform layer (hand-written; not present in the original source)
-# ---------------------------------------------------------------------------
-step "Adding Linux platform layer"
-mkdir -p "$SRC_DIR/OpenTK-1.0/OpenTK.Platform.Linux"
-cp "$PREWRITTEN_DIR/OpenTK.Platform.Linux/"*.cs "$SRC_DIR/OpenTK-1.0/OpenTK.Platform.Linux/"
 
 # ---------------------------------------------------------------------------
 # Patches
@@ -83,6 +79,7 @@ fi
 # Pre-written sources (survive regeneration of src/)
 # ---------------------------------------------------------------------------
 step "Installing pre-written sources"
+cp "$PREWRITTEN_DIR/Engine/Sdl.cs"       "$SRC_DIR/Engine/Engine/Sdl.cs"
 cp "$PREWRITTEN_DIR/Engine/Keyboard.cs"  "$SRC_DIR/Engine/Engine.Input/Keyboard.cs"
 cp "$PREWRITTEN_DIR/Engine/Mouse.cs"     "$SRC_DIR/Engine/Engine.Input/Mouse.cs"
 cp "$PREWRITTEN_DIR/Engine/Touch.cs"     "$SRC_DIR/Engine/Engine.Input/Touch.cs"
@@ -90,36 +87,11 @@ cp "$PREWRITTEN_DIR/Engine/GamePad.cs"   "$SRC_DIR/Engine/Engine.Input/GamePad.c
 cp "$PREWRITTEN_DIR/Engine/Window.cs"    "$SRC_DIR/Engine/Engine/Window.cs"
 cp "$PREWRITTEN_DIR/Engine/Storage.cs"   "$SRC_DIR/Engine/Engine/Storage.cs"
 cp "$PREWRITTEN_DIR/Engine/Utilities.cs" "$SRC_DIR/Engine/Engine/Utilities.cs"
-cp "$PREWRITTEN_DIR/OpenTK.Platform/Factory.cs"             "$SRC_DIR/OpenTK-1.0/OpenTK.Platform/Factory.cs"
-cp "$PREWRITTEN_DIR/OpenTK.Input/Mouse.cs"                  "$SRC_DIR/OpenTK-1.0/OpenTK.Input/Mouse.cs"
-cp "$PREWRITTEN_DIR/OpenTK.Input/IMouseCursorController.cs" "$SRC_DIR/OpenTK-1.0/OpenTK.Input/IMouseCursorController.cs"
 
 # ---------------------------------------------------------------------------
 # Project files (patches don't apply well due to path differences)
 # ---------------------------------------------------------------------------
 step "Fixing project files"
-
-cat > "$SRC_DIR/OpenTK-1.0/OpenTK-1.0.csproj" << 'CSPROJ_EOF'
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
-    <AssemblyName>OpenTK-1.0</AssemblyName>
-    <RootNamespace>OpenTK</RootNamespace>
-    <LangVersion>latest</LangVersion>
-    <Nullable>disable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <NoWarn>$(NoWarn);CS0108;CS0114;CS0169;CS0414;CS0649;CS0612;CS0618;CS1591;CS8981</NoWarn>
-  </PropertyGroup>
-  <ItemGroup>
-    <!-- Android-only platform glue removed; Linux equivalents provided via prewritten/ -->
-    <Compile Include="**/*.cs" Exclude="obj/**;bin/**;Properties/AssemblyInfo.cs;OpenTK.Android/**;OpenTK.Platform.Android/**;OpenTK/GameViewBase.cs;OpenTK.Platform.Egl/EglAndroidPlatformFactory.cs" />
-  </ItemGroup>
-</Project>
-CSPROJ_EOF
 
 cat > "$SRC_DIR/Engine/Engine.csproj" << 'CSPROJ_EOF'
 <Project Sdk="Microsoft.NET.Sdk">
@@ -136,9 +108,6 @@ cat > "$SRC_DIR/Engine/Engine.csproj" << 'CSPROJ_EOF'
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <NoWarn>$(NoWarn);CS0108;CS0114;CS0169;CS0414;CS0649;CS0612;CS0618;CS1591;CS8981</NoWarn>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\OpenTK-1.0\OpenTK-1.0.csproj" />
-  </ItemGroup>
   <ItemGroup>
     <!-- Android-only platform glue replaced by Linux patches -->
     <Compile Include="**/*.cs"
@@ -215,11 +184,6 @@ CSPROJ_EOF
 # ---------------------------------------------------------------------------
 # Build
 # ---------------------------------------------------------------------------
-step "Building OpenTK-1.0 (Linux platform layer)"
-cd "$SRC_DIR/OpenTK-1.0"
-dotnet restore
-dotnet build -c Release --no-restore
-
 step "Building Engine"
 cd "$SRC_DIR/Engine"
 dotnet restore
@@ -243,7 +207,7 @@ mkdir -p "$BUILD_DIR"
 cp "$SRC_DIR/Survivalcraft/bin/Release/net9.0/Survivalcraft.dll" "$BUILD_DIR/"
 cp "$SRC_DIR/Engine/bin/Release/net9.0/Engine.dll" "$BUILD_DIR/"
 cp "$SRC_DIR/EntitySystem.Android.Net/bin/Release/net9.0/EntitySystem.Android.Net.dll" "$BUILD_DIR/"
-cp "$SRC_DIR/OpenTK-1.0/bin/Release/net9.0/OpenTK-1.0.dll" "$BUILD_DIR/"
+rm -f "$BUILD_DIR/OpenTK-1.0.dll" "$BUILD_DIR/OpenTK-1.0.pdb"
 cp -r "$SRC_DIR/Survivalcraft/bin/Release/net9.0/"* "$BUILD_DIR/" 2>/dev/null || true
 
 # The engine calls into libGLESv2 / libopenal, whose installed SONAMEs carry a

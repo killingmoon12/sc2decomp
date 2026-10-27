@@ -1,6 +1,4 @@
 using System;
-using OpenTK;
-using OpenTK.Input;
 
 namespace Engine.Input;
 

@@ -28,7 +28,7 @@ dotnet Survivalcraft.dll
 
 ### Dependencies
 
-.NET SDK 9.0+ bash, rsync, patch, python3 ILSpy (for decompilation via decompile_survivalcraft.sh) libGLESv2.so.2 (Mesa) libopenal.so.1 (OpenAL Soft) libX11, libGLX, libXrandr, libXi, libXcursor XWayland
+.NET SDK 9.0+ bash, rsync, patch, python3 ILSpy (for decompilation via decompile_survivalcraft.sh) SDL2 (libSDL2-2.0.so.0) libGLESv2.so.2 (Mesa) libopenal.so.1 (OpenAL Soft)
 
 ## License
 
