@@ -80,6 +80,8 @@ public sealed class MultiplayerClient
 
 	private readonly SubsystemPickables m_subsystemPickables;
 
+	private readonly SubsystemParticles m_subsystemParticles;
+
 	private PlayerInput m_lastInput;
 
 	private bool m_hasInput;
@@ -128,6 +130,7 @@ public sealed class MultiplayerClient
 		m_subsystemTimeOfDay = project.FindSubsystem<SubsystemTimeOfDay>(throwOnError: true);
 		m_subsystemWeather = project.FindSubsystem<SubsystemWeather>(throwOnError: true);
 		m_subsystemPickables = project.FindSubsystem<SubsystemPickables>(throwOnError: true);
+		m_subsystemParticles = project.FindSubsystem<SubsystemParticles>(throwOnError: true);
 		PlayerCount = m_subsystemPlayers.PlayersData.Count;
 	}
 
@@ -380,10 +383,33 @@ public sealed class MultiplayerClient
 		{
 			value.HasReceivedState = true;
 			ApplyEntityStateImmediate(entity, value, snap: true);
+			return;
 		}
-		else if (entity.FindComponent<ComponentPlayer>(throwOnError: false) == null)
+		if (entity.FindComponent<ComponentPlayer>(throwOnError: false) != null)
 		{
-			ApplyEntityStateImmediate(entity, value, snap: false);
+			// Player bodies are moved by InterpolateEntities (the local one is
+			// also predicted locally), but health and the head look must still
+			// track the host every update.
+			ApplyPlayerState(entity, value);
+			return;
+		}
+		ApplyEntityStateImmediate(entity, value, snap: false);
+	}
+
+	/// <summary>Applies the non-transform parts of a player state on a client.</summary>
+	private void ApplyPlayerState(Entity entity, EntityState state)
+	{
+		ComponentHealth componentHealth = entity.FindComponent<ComponentHealth>(throwOnError: false);
+		if (componentHealth != null && state.HasHealth)
+		{
+			componentHealth.SetNetHealth(state.Health, state.Air);
+		}
+		// The local player's look is predicted from the local mouse, so the
+		// host's (slightly older) angles must not be applied on top of it.
+		if (state.HasLook && !IsLocalPlayerEntity(entity))
+		{
+			ComponentCreature componentCreature = entity.FindComponent<ComponentCreature>(throwOnError: false);
+			componentCreature?.ComponentLocomotion?.SetLookAngles(state.LookAngles);
 		}
 	}
 
@@ -526,7 +552,45 @@ public sealed class MultiplayerClient
 			float pokingPhase = reader.ReadSingle();
 			PlayerData playerData = m_subsystemPlayers.PlayersData.FirstOrDefault((PlayerData p) => p.PlayerIndex == num2);
 			ComponentPlayer componentPlayer = playerData?.ComponentPlayer;
-			componentPlayer?.ComponentMiner.SetNetDigState(cellFace, digProgress, digTime, pokingPhase);
+			ComponentMiner componentMiner = componentPlayer?.ComponentMiner;
+			if (componentMiner == null)
+			{
+				continue;
+			}
+			// ComponentMiner.Dig spawns a debris burst every time the hand
+			// passes the middle of its swing. MiningState carries the same
+			// phase, so the client can mirror those chips without extra
+			// messages (it never runs the miner itself).
+			float pokingPhase2 = componentMiner.PokingPhase;
+			componentMiner.SetNetDigState(cellFace, digProgress, digTime, pokingPhase);
+			if (cellFace.HasValue && pokingPhase2 <= 0.5f && pokingPhase > 0.5f)
+			{
+				SpawnDigDebrisParticles(cellFace.Value);
+			}
+		}
+	}
+
+	/// <summary>
+	/// Mirrors the block chips the host's miner creates when the hand hits the
+	/// block. The client has the same terrain, so it can build the particle
+	/// system from the replicated cell face.
+	/// </summary>
+	private void SpawnDigDebrisParticles(CellFace cellFace)
+	{
+		try
+		{
+			int cellValue = m_subsystemTerrain.Terrain.GetCellValue(cellFace.X, cellFace.Y, cellFace.Z);
+			if (cellValue == 0)
+			{
+				return;
+			}
+			Block block = BlocksManager.Blocks[Terrain.ExtractContents(cellValue)];
+			Vector3 position = new Vector3(cellFace.X + 0.5f, cellFace.Y + 0.5f, cellFace.Z + 0.5f) + 0.5f * CellFace.FaceToVector3(cellFace.Face);
+			m_subsystemParticles.AddParticleSystem(block.CreateDebrisParticleSystem(m_subsystemTerrain, position, cellValue, 0.35f));
+		}
+		catch (Exception ex)
+		{
+			Log.Warning("[Multiplayer] Could not create dig particles: " + ex.Message);
 		}
 	}
 
@@ -539,7 +603,9 @@ public sealed class MultiplayerClient
 			string name = reader.ReadString();
 			float level = reader.ReadSingle();
 			// Host-side remote flag; unused on a client, but part of the frame.
-			_ = reader.ReadBoolean();
+			// The host writes it as an int, so it must be consumed as one, or
+			// every following field is read three bytes early.
+			_ = reader.ReadInt32();
 			bool hasPlayer = reader.ReadBoolean();
 			PlayerData playerData = EnsurePlayerData(num2, name, level);
 			if (!hasPlayer)

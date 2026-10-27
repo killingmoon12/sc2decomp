@@ -664,7 +664,12 @@ public static class MultiplayerManager
 		float yaw = MultiplayerEntities.GetYaw(componentBody.Rotation);
 		yaw -= componentLocomotion.TurnSpeed * look.X * dt;
 		componentBody.Rotation = MultiplayerEntities.RotationFromYaw(yaw);
-		componentLocomotion.AddLookAngles(new Vector2(componentLocomotion.LookSpeed * look.X * dt, componentLocomotion.LookSpeed * look.Y * num * dt));
+		// Horizontal mouse movement rotates the body (exactly like
+		// ComponentLocomotion does with TurnOrder); only vertical mouse
+		// movement is head pitch. Adding the horizontal delta to LookAngles
+		// would turn the camera about twice as fast as the body, which makes
+		// walking go off the direction the player is looking at.
+		componentLocomotion.AddLookAngles(new Vector2(0f, componentLocomotion.LookSpeed * look.Y * num * dt));
 	}
 
 	public static void SubmitLocalInput(PlayerInput input)
