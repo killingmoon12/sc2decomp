@@ -1,0 +1,11 @@
+--- a/Survivalcraft/Game/WidgetInput.cs
++++ b/Survivalcraft/Game/WidgetInput.cs
+@@ -887,7 +887,7 @@
+ 		{
+ 			Cancel = true;
+ 		}
+-		if (IsPadButtonDownOnce(GamePadButton.Back))
++		if (IsPadButtonDownOnce(GamePadButton.Start))
+ 		{
+ 			Back = true;
+ 		}

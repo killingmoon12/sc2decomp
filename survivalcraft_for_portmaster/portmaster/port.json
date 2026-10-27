@@ -1,0 +1,45 @@
+{
+  "version": 4,
+  "name": "survivalcraft2.zip",
+  "items": [
+    "Survivalcraft 2.sh",
+    "survivalcraft2"
+  ],
+  "items_opt": [],
+  "attr": {
+    "title": "Survivalcraft 2",
+    "porter": [
+      "killingmoon12"
+    ],
+    "desc": "Survivalcraft 2 is a blocky sandbox survival game. Explore an open world, mine and craft, build a shelter, farm crops, raise animals, and survive the changing seasons.",
+    "desc_md": null,
+    "inst": "Personal build for a legally purchased copy of Survivalcraft 2. Do not redistribute this package.",
+    "inst_md": null,
+    "genres": [
+      "adventure",
+      "simulation"
+    ],
+    "image": null,
+    "rtr": false,
+    "exp": false,
+    "runtime": [
+      "dotnet-8.0.12"
+    ],
+    "store": [
+      {
+        "name": "Google Play",
+        "gameurl": "https://play.google.com/store/apps/details?id=com.candyrufusgames.survivalcraft2",
+        "developerurl": "https://kaalus.wordpress.com/"
+      },
+      {
+        "name": "Microsoft Store",
+        "gameurl": "https://apps.microsoft.com/detail/9phc48p58nb2",
+        "developerurl": "https://kaalus.wordpress.com/"
+      }
+    ],
+    "availability": "paid",
+    "reqs": [],
+    "arch": [],
+    "min_glibc": ""
+  }
+}

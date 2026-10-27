@@ -1,0 +1,14 @@
+--- a/Survivalcraft/Game/ComponentInput.cs
++++ b/Survivalcraft/Game/ComponentInput.cs
+@@ -27,7 +27,10 @@
+ 
+ 	public PlayerInput PlayerInput => m_playerInput;
+ 
+-	public bool IsControlledByTouch { get; private set; } = true;
++	// Desktop port: there is no touch screen, so a player starts out in
++	// mouse/keyboard mode and the on-screen move/look pads stay hidden
++	// until an actual touch input arrives.
++	public bool IsControlledByTouch { get; private set; } = false;
+ 
+ 	public bool IsControlledByVr
+ 	{

@@ -1,0 +1,20 @@
+--- a/Survivalcraft/Game/ComponentGui.cs
++++ b/Survivalcraft/Game/ComponentGui.cs
+@@ -496,7 +496,7 @@
+ 			else if (!m_gamepadHelpMessageShown && (m_componentPlayer.PlayerData.InputDevice & WidgetInputDevice.Gamepads) != 0 && Time.PeriodicEvent(7.0, 0.0))
+ 			{
+ 				m_gamepadHelpMessageShown = true;
+-				DisplaySmallMessage("Press START/PAUSE for gamepad controls\n(or see HELP)", Color.White, blinking: true, playNotificationSound: true);
++				DisplaySmallMessage("Press SELECT for gamepad controls\n(or see HELP)", Color.White, blinking: true, playNotificationSound: true);
+ 			}
+ 		}
+ 		if (playerInput.KeyboardHelp)
+@@ -743,7 +743,7 @@
+ 				ModalPanelWidget = null;
+ 			}
+ 		}
+-		else if (input.Back || m_backButtonWidget.IsClicked)
++		else if (!DialogsManager.HasDialogs(m_componentPlayer.GuiWidget) && (input.Back || m_backButtonWidget.IsClicked))
+ 		{
+ 			DialogsManager.ShowDialog(m_componentPlayer.GuiWidget, new GameMenuDialog(m_componentPlayer));
+ 		}

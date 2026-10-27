@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<gameList>
+  <game>
+    <path>./Survivalcraft 2.sh</path>
+    <name>Survivalcraft 2</name>
+    <desc>A blocky sandbox survival game. Explore an infinite world, mine and craft, build shelter, farm crops, raise animals, and survive four seasons in first person or third person.</desc>
+    <releasedate>20160710T000000</releasedate>
+    <developer>Candy Rufus Games</developer>
+    <publisher>Candy Rufus Games</publisher>
+    <genre>Adventure</genre>
+    <image>./survivalcraft2/screenshot.png</image>
+  </game>
+</gameList>

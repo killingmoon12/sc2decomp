@@ -1,0 +1,61 @@
+--- a/Survivalcraft/Game/AnalyticsManager.cs
++++ b/Survivalcraft/Game/AnalyticsManager.cs
+@@ -64,3 +64,3 @@
+ 			buffer[3] = "Error";
+-			Post("quality.kaalus.com", 30099, string.Format("/{0}/{1}/{2}/{3}", (ReadOnlySpan<object?>)buffer), memoryStream.ToArray());
++			Post("quality.kaalus.com", 30099, string.Format("/{0}/{1}/{2}/{3}", ((ReadOnlySpan<object?>)buffer).ToArray()), memoryStream.ToArray());
+ 		}
+--- a/Survivalcraft/Game/ExternalContentScreen.cs
++++ b/Survivalcraft/Game/ExternalContentScreen.cs
+@@ -66,3 +66,3 @@
+ 				buffer[3] = text;
+-				text2 = string.Format("{0} | {1} | {2:dd MMM yyyy HH:mm}{3}", (ReadOnlySpan<object?>)buffer);
++				text2 = string.Format("{0} | {1} | {2:dd MMM yyyy HH:mm}{3}", ((ReadOnlySpan<object?>)buffer).ToArray());
+ 			}
+--- a/Survivalcraft/Game/FireworksBlock.cs
++++ b/Survivalcraft/Game/FireworksBlock.cs
+@@ -107,3 +107,3 @@
+ 		buffer[3] = ((altitude == 0) ? "Low" : "High");
+-		return string.Format("Fireworks {0} {1}{2} ({3})", (ReadOnlySpan<object?>)buffer);
++		return string.Format("Fireworks {0} {1}{2} ({3})", ((ReadOnlySpan<object?>)buffer).ToArray());
+ 	}
+--- a/Survivalcraft/Game/PerformanceManager.cs
++++ b/Survivalcraft/Game/PerformanceManager.cs
+@@ -150,3 +150,3 @@
+ 				buffer[3] = 1f / AverageFrameTime;
+-				m_statsString = string.Format("CPUMEM {0:0}MB, GPUMEM {1:0}MB, CPU {2:0}%, {3:0.0} FPS", (ReadOnlySpan<object?>)buffer);
++				m_statsString = string.Format("CPUMEM {0:0}MB, GPUMEM {1:0}MB, CPU {2:0}%, {3:0.0} FPS", ((ReadOnlySpan<object?>)buffer).ToArray());
+ 			}
+--- a/Survivalcraft/Game/Program.cs
++++ b/Survivalcraft/Game/Program.cs
+@@ -85,3 +85,3 @@
+ 		buffer[14] = RuntimeInformation.OSArchitecture;
+-		Log.Information(string.Format("Survivalcraft starting up at {0}, Version={1}, BuildConfiguration={2}, Platform={3}, DeviceModel={4}, OSVersion={5}, Storage.AvailableFreeSpace={6}MB, ApproximateScreenDpi={7:0.0}, ApproxScreenInches={8:0.0}, ScreenResolution={9}, ProcessorsCount={10}, RAM={11}MB, 64bit={12}, ProcessArchitecture={13} OSArchitecture={14}", (ReadOnlySpan<object?>)buffer));
++		Log.Information(string.Format("Survivalcraft starting up at {0}, Version={1}, BuildConfiguration={2}, Platform={3}, DeviceModel={4}, OSVersion={5}, Storage.AvailableFreeSpace={6}MB, ApproximateScreenDpi={7:0.0}, ApproxScreenInches={8:0.0}, ScreenResolution={9}, ProcessorsCount={10}, RAM={11}MB, 64bit={12}, ProcessArchitecture={13} OSArchitecture={14}", ((ReadOnlySpan<object?>)buffer).ToArray()));
+ 		MarketplaceManager.Initialize();
+--- a/Survivalcraft/Game/Segment2.cs
++++ b/Survivalcraft/Game/Segment2.cs
+@@ -18,3 +18,3 @@
+ 		buffer[3] = End.Y;
+-		return string.Format("{0}, {1},  {2}, {3}", (ReadOnlySpan<object?>)buffer);
++		return string.Format("{0}, {1},  {2}, {3}", ((ReadOnlySpan<object?>)buffer).ToArray());
+ 	}
+--- a/Survivalcraft/Game/Segment3.cs
++++ b/Survivalcraft/Game/Segment3.cs
+@@ -20,3 +20,3 @@
+ 		buffer[5] = End.Z;
+-		return string.Format("{0}, {1}, {2},  {3}, {4}, {5}", (ReadOnlySpan<object?>)buffer);
++		return string.Format("{0}, {1}, {2},  {3}, {4}, {5}", ((ReadOnlySpan<object?>)buffer).ToArray());
+ 	}
+--- a/Survivalcraft/Game/VersionsManager.cs
++++ b/Survivalcraft/Game/VersionsManager.cs
+@@ -33,3 +33,3 @@
+ 		buffer[3] = assemblyName.Version.Revision;
+-		Version = string.Format("{0}.{1}.{2}.{3}", (ReadOnlySpan<object?>)buffer);
++		Version = string.Format("{0}.{1}.{2}.{3}", ((ReadOnlySpan<object?>)buffer).ToArray());
+ 		SerializationVersion = $"{assemblyName.Version.Major}.{assemblyName.Version.Minor}";
+--- a/Survivalcraft/Game/PlayScreen.cs
++++ b/Survivalcraft/Game/PlayScreen.cs
+@@ -42 +42 @@
+-			labelWidget2.Text = string.Format("{0} | {1:dd MMM yyyy HH:mm} | {2} | {3} | {4}", (ReadOnlySpan<object?>)buffer);
++			labelWidget2.Text = string.Format("{0} | {1:dd MMM yyyy HH:mm} | {2} | {3} | {4}", ((ReadOnlySpan<object?>)buffer).ToArray());

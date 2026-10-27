@@ -1,0 +1,11 @@
+--- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/OpenTK-1.0/OpenTK/Configuration.cs	2026-10-19 15:19:34.332919211 +0300
++++ src/OpenTK-1.0/OpenTK/Configuration.cs	2026-10-19 15:41:40.891788781 +0300
+@@ -122,7 +122,7 @@
+ 				else
+ 				{
+ 					runningOnLinux = (runningOnUnix = true);
+-					runningOnAndroid = true;
++					// runningOnAndroid = true; // We're on Linux, not Android
+ 				}
+ 			}
+ 			if (Type.GetType("Mono.Runtime") != null)

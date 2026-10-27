@@ -1,0 +1,13 @@
+OpenAL Soft 1.23.1
+
+This package bundles the unmodified aarch64 build of OpenAL Soft 1.23.1 as
+libs.aarch64/libopenal.so.1.
+
+Source code:
+https://github.com/kcat/openal-soft/archive/refs/tags/1.23.1.tar.gz
+
+Project:
+https://github.com/kcat/openal-soft
+
+License:
+GNU Lesser General Public License 2.1. See LICENSE-libopenal-LGPL.txt.

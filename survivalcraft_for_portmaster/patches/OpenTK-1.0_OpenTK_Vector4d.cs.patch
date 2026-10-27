@@ -1,0 +1,58 @@
+--- /home/georgefloyd/build/survivalcraft_decompiled/decompiled/OpenTK-1.0/OpenTK/Vector4d.cs	2026-10-19 15:19:34.749923585 +0300
++++ src/OpenTK-1.0/OpenTK/Vector4d.cs	2026-10-19 15:50:38.331489211 +0300
+@@ -429,50 +429,11 @@
+ 
+ 	public static void Clamp(ref Vector4d vec, ref Vector4d min, ref Vector4d max, out Vector4d result)
+ 	{
+-		ref double x = ref result.X;
+-		double num;
+-		if (vec.X < min.X)
+-		{
+-			num = min.X;
+-		}
+-		else
+-		{
+-			num = ((vec.X > max.X) ? max.X : vec.X);
+-		}
+-		x = num;
+-		ref double y = ref result.Y;
+-		double num2;
+-		if (vec.Y < min.Y)
+-		{
+-			num2 = min.Y;
+-		}
+-		else
+-		{
+-			num2 = ((vec.Y > max.Y) ? max.Y : vec.Y);
+-		}
+-		y = num2;
+-		ref double z = ref result.Z;
+-		double num3;
+-		if (vec.X < min.Z)
+-		{
+-			num3 = min.Z;
+-		}
+-		else
+-		{
+-			num3 = ((vec.Z > max.Z) ? max.Z : vec.Z);
+-		}
+-		z = num3;
+-		ref double w = ref result.W;
+-		double num4;
+-		if (vec.Y < min.W)
+-		{
+-			num4 = min.W;
+-		}
+-		else
+-		{
+-			num4 = ((vec.W > max.W) ? max.W : vec.W);
+-		}
+-		w = num4;
++		result = new Vector4d();
++		result.X = vec.X < min.X ? min.X : (vec.X > max.X ? max.X : vec.X);
++		result.Y = vec.Y < min.Y ? min.Y : (vec.Y > max.Y ? max.Y : vec.Y);
++		result.Z = vec.Z < min.Z ? min.Z : (vec.Z > max.Z ? max.Z : vec.Z);
++		result.W = vec.W < min.W ? min.W : (vec.W > max.W ? max.W : vec.W);
+ 	}
+ 
+ 	public static Vector4d Normalize(Vector4d vec)

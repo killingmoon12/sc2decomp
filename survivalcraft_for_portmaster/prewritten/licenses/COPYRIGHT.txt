@@ -1,0 +1,16 @@
+Survivalcraft 2 PortMaster package
+Copyright notice
+
+Survivalcraft 2, its game code, artwork, audio, and other content are
+Copyright (c) 2011-2025 Candy Rufus Games. All rights reserved.
+
+This package is for personal use by owners of a legally purchased copy of
+Survivalcraft 2. It must not be redistributed, sold, or published as a
+ready-to-run game without written permission from Candy Rufus Games.
+
+The game files were produced from a legally purchased Android APK for the
+owner's own personal use. No licence to redistribute the game is granted by
+this build.
+
+The porting code, platform layer, build scripts, and documentation are the
+work of the port author and are provided for personal use with the game.

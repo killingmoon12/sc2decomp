@@ -1,0 +1,24 @@
+Third party notices
+
+OpenTK
+  MIT License. Copyright (c) 2006-2019 Stefanos Apostolopoulos for the Open
+  Toolkit project. https://github.com/opentk/opentk
+
+NVorbis
+  MIT License. Copyright (c) 2020 Andrew Ward.
+  https://github.com/NVorbis/NVorbis
+
+Hjg.Pngcs
+  Apache License 2.0. Copyright 2012 Hernan J. Gonzalez.
+  https://github.com/leonbloy/pngcs
+
+FluxJpeg.Core
+  MIT License. https://github.com/briandonahue/FluxJpeg.Core
+
+OpenAL Soft
+  GNU Lesser General Public License 2.1.
+  https://github.com/kcat/openal-soft
+
+.NET runtime host
+  MIT License. Copyright (c) .NET Foundation and Contributors.
+  https://github.com/dotnet/runtime
