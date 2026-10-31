@@ -476,9 +476,14 @@ public static class MultiplayerManager
 			Role = MultiplayerRole.Client;
 			s_clientWorldDirectory = s_joinResult.WorldDirectory;
 			s_client.Start();
-			// The live client owns the channel now; the join result is only
-			// needed until this point and must not be disposed later as if it
-			// were an abandoned join.
+			// Remote avatars belong to the live session, not to the world.
+			// Keep them out of saves so a client-side world save never bakes
+			// remote players into the world as if they were local splitscreen
+			// players (which is what happens on alt-F4 exit).
+			EntityNetRegistry.SaveFilter = delegate(Entity entity)
+			{
+				return s_includeRemotePlayersInSave || !IsRemotePlayerEntity(entity);
+			};
 			s_joinResult = null;
 			s_statusText = DescribeStatus();
 			Log.Information("[Multiplayer] Joined game at {0}", s_client.HostDescription);
