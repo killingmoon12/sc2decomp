@@ -1035,44 +1035,58 @@ public sealed class MultiplayerServer : IDisposable
 			{
 				continue;
 			}
-			client.Channel.Send(MultiplayerMessage.PlayerState, delegate(EngineBinaryWriter writer)
+			try
 			{
-				writer.Write(m_subsystemPlayers.PlayersData.Count);
-				foreach (PlayerData playersDatum in m_subsystemPlayers.PlayersData)
+				client.Channel.Send(MultiplayerMessage.PlayerState, delegate(EngineBinaryWriter writer)
 				{
-					ComponentPlayer componentPlayer = playersDatum.ComponentPlayer;
-					writer.Write(playersDatum.PlayerIndex);
-					writer.Write(playersDatum.Name);
-					writer.Write(playersDatum.Level);
-					writer.Write(playersDatum.IsRemote ? 1 : 0);
-					if (componentPlayer == null)
+					writer.Write(m_subsystemPlayers.PlayersData.Count);
+					foreach (PlayerData playersDatum in m_subsystemPlayers.PlayersData)
 					{
-						writer.Write(0);
-						continue;
+						ComponentPlayer componentPlayer = playersDatum.ComponentPlayer;
+						writer.Write(playersDatum.PlayerIndex);
+						writer.Write(playersDatum.Name);
+						writer.Write(playersDatum.Level);
+						writer.Write(playersDatum.IsRemote ? 1 : 0);
+						if (componentPlayer == null)
+						{
+							writer.Write(0);
+							continue;
+						}
+						writer.Write(1);
+						ComponentHealth componentHealth = componentPlayer.ComponentHealth;
+						ComponentVitalStats componentVitalStats = componentPlayer.ComponentVitalStats;
+						ComponentInventoryBase componentInventoryBase = componentPlayer.ComponentMiner?.Inventory as ComponentInventoryBase;
+						// Health and vital stats components should always exist on
+						// player entities, but guard against a missing component
+						// so one broken player cannot crash the host for everyone.
+						writer.Write(componentHealth != null ? componentHealth.Health : 1f);
+						writer.Write(componentHealth != null ? componentHealth.Air : 1f);
+						writer.Write(componentVitalStats != null ? componentVitalStats.Food : 1f);
+						writer.Write(componentVitalStats != null ? componentVitalStats.Temperature : 1f);
+						writer.Write(componentVitalStats != null ? componentVitalStats.Wetness : 1f);
+						if (componentInventoryBase == null)
+						{
+							writer.Write(0);
+							continue;
+						}
+						int slotsCount = componentInventoryBase.SlotsCount;
+						writer.Write(slotsCount);
+						writer.Write(componentInventoryBase.ActiveSlotIndex);
+						for (int i = 0; i < slotsCount; i++)
+						{
+							writer.Write(componentInventoryBase.GetSlotValue(i));
+							writer.Write(componentInventoryBase.GetSlotCount(i));
+						}
 					}
-					writer.Write(1);
-					ComponentHealth componentHealth = componentPlayer.ComponentHealth;
-					ComponentVitalStats componentVitalStats = componentPlayer.ComponentVitalStats;
-					ComponentInventoryBase componentInventoryBase = componentPlayer.ComponentMiner.Inventory as ComponentInventoryBase;
-					writer.Write(componentHealth.Health);
-					writer.Write(componentHealth.Air);
-					writer.Write(componentVitalStats.Food);
-					writer.Write(componentVitalStats.Temperature);
-					writer.Write(componentVitalStats.Wetness);
-					if (componentInventoryBase == null)
-					{
-						writer.Write(0);
-						continue;
-					}
-					writer.Write(componentInventoryBase.SlotsCount);
-					writer.Write(componentInventoryBase.ActiveSlotIndex);
-					for (int i = 0; i < componentInventoryBase.SlotsCount; i++)
-					{
-						writer.Write(componentInventoryBase.GetSlotValue(i));
-						writer.Write(componentInventoryBase.GetSlotCount(i));
-					}
-				}
-			});
+				});
+			}
+			catch (Exception ex)
+			{
+				// One client's PlayerState payload must not prevent every
+				// other client from receiving it. Disconnect the bad client.
+				Log.Warning("[Multiplayer] Could not send PlayerState to {0}: {1}", client.Name, ex.Message);
+				DisconnectClient(client, "Player state error.");
+			}
 		}
 	}
 

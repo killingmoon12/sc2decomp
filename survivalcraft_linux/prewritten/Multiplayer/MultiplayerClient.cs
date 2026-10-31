@@ -267,7 +267,15 @@ public sealed class MultiplayerClient
 		case MultiplayerMessage.EntityAdd:
 		{
 			string text = engineBinaryReader.ReadString();
-			AddEntity(XElement.Parse(text));
+			try
+			{
+				AddEntity(XElement.Parse(text));
+			}
+			catch (Exception ex)
+			{
+				// Malformed entity XML from the host must not crash the client.
+				Log.Warning("[Multiplayer] Could not add entity from XML: {0}", ex.Message);
+			}
 			break;
 		}
 		case MultiplayerMessage.EntityRemove:
@@ -637,66 +645,145 @@ public sealed class MultiplayerClient
 	private void ReadPlayerStates(EngineBinaryReader reader)
 	{
 		int num = reader.ReadInt32();
+		if (num < 0 || num > MultiplayerManager.MaxPlayers * 2)
+		{
+			throw new InvalidOperationException("Invalid player count " + num + ".");
+		}
 		for (int i = 0; i < num; i++)
 		{
-			int num2 = reader.ReadInt32();
-			string name = reader.ReadString();
-			float level = reader.ReadSingle();
-			// Host-side remote flag; unused on a client, but part of the frame.
-			// The host writes it as an int, so it must be consumed as one, or
-			// every following field is read three bytes early.
-			_ = reader.ReadInt32();
-			bool hasPlayer = reader.ReadBoolean();
-			PlayerData playerData = EnsurePlayerData(num2, name, level);
-			if (!hasPlayer)
+			try
 			{
-				continue;
+				ReadPlayerState(reader);
 			}
-			float health = reader.ReadSingle();
-			float air = reader.ReadSingle();
-			float food = reader.ReadSingle();
-			float temperature = reader.ReadSingle();
-			float wetness = reader.ReadSingle();
-			int slotCount = reader.ReadInt32();
-			int activeSlot = -1;
-			if (slotCount > 0)
+			catch (Exception ex)
 			{
-				activeSlot = reader.ReadInt32();
+				// One corrupted player entry must not desync the rest of the
+				// PlayerState frame. Skip the remaining players in this entry
+				// by throwing so the whole frame is rejected and the client
+				// waits for the next one (5 Hz).
+				Log.Warning("[Multiplayer] Corrupted player entry in PlayerState: {0}", ex.Message);
+				throw;
 			}
-			int[] values = new int[slotCount];
-			int[] counts = new int[slotCount];
-			// The payload is always consumed in full, even when this player or
-			// its entity is not present locally yet, otherwise every following
-			// player entry is read at the wrong offset.
-			for (int j = 0; j < slotCount; j++)
+		}
+	}
+
+	private void ReadPlayerState(EngineBinaryReader reader)
+	{
+		int num2 = reader.ReadInt32();
+		string name = reader.ReadString();
+		float level = reader.ReadSingle();
+		// Host-side remote flag; unused on a client, but part of the frame.
+		// The host writes it as an int, so it must be consumed as one, or
+		// every following field is read three bytes early.
+		_ = reader.ReadInt32();
+		bool hasPlayer = reader.ReadBoolean();
+		PlayerData playerData;
+		try
+		{
+			playerData = EnsurePlayerData(num2, name, level);
+		}
+		catch (InvalidOperationException)
+		{
+			// Too many local players already; skip this remote player's data
+			// but still consume its fields so the stream stays aligned.
+			SkipPlayerStateFields(reader, hasPlayer);
+			return;
+		}
+		if (!hasPlayer)
+		{
+			return;
+		}
+		float health = reader.ReadSingle();
+		float air = reader.ReadSingle();
+		float food = reader.ReadSingle();
+		float temperature = reader.ReadSingle();
+		float wetness = reader.ReadSingle();
+		int slotCount = reader.ReadInt32();
+		if (slotCount < 0 || slotCount > 128)
+		{
+			throw new InvalidOperationException("Invalid slot count " + slotCount + ".");
+		}
+		int activeSlot = -1;
+		if (slotCount > 0)
+		{
+			activeSlot = reader.ReadInt32();
+		}
+		int[] values = new int[slotCount];
+		int[] counts = new int[slotCount];
+		// The payload is always consumed in full, even when this player or
+		// its entity is not present locally yet, otherwise every following
+		// player entry is read at the wrong offset.
+		for (int j = 0; j < slotCount; j++)
+		{
+			values[j] = reader.ReadInt32();
+			counts[j] = reader.ReadInt32();
+		}
+		ComponentPlayer componentPlayer = playerData.ComponentPlayer;
+		ComponentInventoryBase inventory = componentPlayer?.ComponentMiner?.Inventory as ComponentInventoryBase;
+		if (componentPlayer == null)
+		{
+			return;
+		}
+		if (inventory != null && slotCount > 0 && ShouldApplyLocalInventory(num2, values, counts, activeSlot))
+		{
+			int num3 = MathUtils.Min(slotCount, inventory.SlotsCount);
+			for (int k = 0; k < num3; k++)
 			{
-				values[j] = reader.ReadInt32();
-				counts[j] = reader.ReadInt32();
+				inventory.SetSlotNet(k, values[k], counts[k]);
 			}
-			ComponentPlayer componentPlayer = playerData.ComponentPlayer;
-			ComponentInventoryBase inventory = componentPlayer?.ComponentMiner.Inventory as ComponentInventoryBase;
-			if (componentPlayer == null)
+			if (activeSlot >= -1 && activeSlot < inventory.SlotsCount)
 			{
-				continue;
+				inventory.ActiveSlotIndex = activeSlot;
 			}
-			if (inventory != null && slotCount > 0 && ShouldApplyLocalInventory(num2, values, counts, activeSlot))
+			if (num2 == MultiplayerManager.LocalPlayerIndex)
 			{
-				int num3 = MathUtils.Min(slotCount, inventory.SlotsCount);
-				for (int k = 0; k < num3; k++)
-				{
-					inventory.SetSlotNet(k, values[k], counts[k]);
-				}
-				if (activeSlot >= -1 && activeSlot < inventory.SlotsCount)
-				{
-					inventory.ActiveSlotIndex = activeSlot;
-				}
-				if (num2 == MultiplayerManager.LocalPlayerIndex)
-				{
-					RememberLocalPlayerInventory(inventory);
-				}
+				RememberLocalPlayerInventory(inventory);
 			}
-			componentPlayer.ComponentHealth.SetNetHealth(health, air);
-			componentPlayer.ComponentVitalStats.SetNetVitals(food, temperature, wetness);
+		}
+		// Health and vitals components should exist on player entities, but
+		// guard against a missing component instead of crashing.
+		ComponentHealth componentHealth = componentPlayer.ComponentHealth;
+		if (componentHealth != null)
+		{
+			componentHealth.SetNetHealth(health, air);
+		}
+		ComponentVitalStats componentVitalStats = componentPlayer.ComponentVitalStats;
+		if (componentVitalStats != null)
+		{
+			componentVitalStats.SetNetVitals(food, temperature, wetness);
+		}
+	}
+
+	/// <summary>
+	/// Consumes the remaining fields of a player state entry when the player
+	/// cannot be added locally, so the stream stays aligned for the next
+	/// player entry.
+	/// </summary>
+	private static void SkipPlayerStateFields(EngineBinaryReader reader, bool hasPlayer)
+	{
+		if (!hasPlayer)
+		{
+			return;
+		}
+		reader.ReadSingle(); // health
+		reader.ReadSingle(); // air
+		reader.ReadSingle(); // food
+		reader.ReadSingle(); // temperature
+		reader.ReadSingle(); // wetness
+		int slotCount = reader.ReadInt32();
+		if (slotCount > 0)
+		{
+			reader.ReadInt32(); // active slot
+		}
+		if (slotCount < 0 || slotCount > 128)
+		{
+			// Can't safely skip; let the caller handle the desync.
+			throw new InvalidOperationException("Invalid slot count " + slotCount + ".");
+		}
+		for (int j = 0; j < slotCount; j++)
+		{
+			reader.ReadInt32(); // value
+			reader.ReadInt32(); // count
 		}
 	}
 
