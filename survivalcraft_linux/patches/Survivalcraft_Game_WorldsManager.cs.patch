@@ -1,6 +1,14 @@
 --- a/Survivalcraft/Game/WorldsManager.cs
 +++ b/Survivalcraft/Game/WorldsManager.cs
-@@ -65,6 +65,15 @@
+@@ -2,6 +2,7 @@
+ using System.Collections.Generic;
+ using System.IO;
+ using System.Linq;
++using System.Text;
+ using System.Xml.Linq;
+ using Engine;
+ using Engine.Serialization;
+@@ -65,6 +66,15 @@
  		PackWorld(directoryName, targetStream, null, embedExternalContent: true);
  	}
  
@@ -16,7 +24,7 @@
  	public static void DeleteWorld(string directoryName)
  	{
  		if (Storage.DirectoryExists(directoryName))
-@@ -416,7 +425,7 @@
+@@ -416,7 +426,7 @@
  		throw new InvalidOperationException("Players node not found in project.");
  	}
  
@@ -25,15 +33,17 @@
  	{
  		WorldInfo worldInfo = GetWorldInfo(directoryName);
  		if (worldInfo == null)
-@@ -432,6 +441,14 @@
+@@ -432,6 +442,16 @@
  			if (item.StartsWith(directoryName))
  			{
  				string filenameInZip = item.Remove(0, directoryName.Length).TrimStart('/');
 +				if (projectXmlOverride != null && filenameInZip == "Project.xml")
 +				{
-+					using MemoryStream memoryStream = new MemoryStream();
-+					XmlUtils.SaveXmlToStream(projectXmlOverride, memoryStream, null, throwOnError: true);
-+					memoryStream.Position = 0L;
++					// XmlUtils.SaveXmlToStream closes the stream it writes to,
++					// so the XML has to be materialized before it is handed to
++					// the zip writer.
++					byte[] bytes = Encoding.UTF8.GetBytes(XmlUtils.SaveXmlToString(projectXmlOverride, throwOnError: true));
++					using MemoryStream memoryStream = new MemoryStream(bytes, writable: false);
 +					zipArchive.AddStream(filenameInZip, memoryStream);
 +					continue;
 +				}
