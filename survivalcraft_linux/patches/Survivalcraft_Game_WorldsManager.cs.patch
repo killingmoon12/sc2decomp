@@ -1,0 +1,42 @@
+--- a/Survivalcraft/Game/WorldsManager.cs
++++ b/Survivalcraft/Game/WorldsManager.cs
+@@ -65,6 +65,15 @@
+ 		PackWorld(directoryName, targetStream, null, embedExternalContent: true);
+ 	}
+ 
++	/// <summary>
++	/// Exports a world while substituting the given Project.xml. Snapshots for
++	/// multiplayer clients use this so the live save on disk is never modified.
++	/// </summary>
++	public static void ExportWorld(string directoryName, Stream targetStream, XElement projectXml)
++	{
++		PackWorld(directoryName, targetStream, null, embedExternalContent: true, projectXml);
++	}
++
+ 	public static void DeleteWorld(string directoryName)
+ 	{
+ 		if (Storage.DirectoryExists(directoryName))
+@@ -416,7 +425,7 @@
+ 		throw new InvalidOperationException("Players node not found in project.");
+ 	}
+ 
+-	private static void PackWorld(string directoryName, Stream targetStream, Func<string, bool> filter, bool embedExternalContent)
++	private static void PackWorld(string directoryName, Stream targetStream, Func<string, bool> filter, bool embedExternalContent, XElement projectXmlOverride = null)
+ 	{
+ 		WorldInfo worldInfo = GetWorldInfo(directoryName);
+ 		if (worldInfo == null)
+@@ -432,6 +441,14 @@
+ 			if (item.StartsWith(directoryName))
+ 			{
+ 				string filenameInZip = item.Remove(0, directoryName.Length).TrimStart('/');
++				if (projectXmlOverride != null && filenameInZip == "Project.xml")
++				{
++					using MemoryStream memoryStream = new MemoryStream();
++					XmlUtils.SaveXmlToStream(projectXmlOverride, memoryStream, null, throwOnError: true);
++					memoryStream.Position = 0L;
++					zipArchive.AddStream(filenameInZip, memoryStream);
++					continue;
++				}
+ 				zipArchive.AddStream(filenameInZip, source);
+ 				continue;
+ 			}

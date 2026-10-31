@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Xml.Linq;
 using Engine;
 using Engine.Serialization;
 using GameEntitySystem;
@@ -643,9 +644,13 @@ public sealed class MultiplayerServer : IDisposable
 		MultiplayerManager.BeginSnapshotSave();
 		try
 		{
-			GameManager.SaveProject(waitForCompletion: true, showErrorDialog: false);
+			// Serialize in memory only. Writing Project.xml into the host's
+			// live world directory here would bake the joining remote player
+			// into the host save, so a crash or alt-F4 would reload the world
+			// with that avatar as a local splitscreen player.
+			XElement projectXml = GameManager.CreateProjectXml();
 			using MemoryStream memoryStream = new MemoryStream();
-			WorldsManager.ExportWorld(GameManager.WorldInfo.DirectoryName, memoryStream);
+			WorldsManager.ExportWorld(GameManager.WorldInfo.DirectoryName, memoryStream, projectXml);
 			// Send from the stream buffer directly; ToArray() would allocate a
 			// second copy of the whole (possibly very large) snapshot.
 			buffer = memoryStream.GetBuffer();

@@ -8,16 +8,18 @@
  using Engine;
  using GameEntitySystem;
  using TemplatesDatabase;
-@@ -17,7 +18,7 @@
+@@ -17,7 +18,9 @@
  
  	private int m_nextPlayerIndex;
  
 -	public const int MaxPlayers = 4;
++	private bool m_orphanPlayersSwept;
++
 +	public const int MaxPlayers = 8;
  
  	public ReadOnlyList<PlayerData> PlayersData => new ReadOnlyList<PlayerData>(m_playersData);
  
-@@ -61,7 +62,7 @@
+@@ -61,7 +64,7 @@
  
  	public void AddPlayerData(PlayerData playerData)
  	{
@@ -26,7 +28,7 @@
  		{
  			throw new InvalidOperationException("Too many players.");
  		}
-@@ -74,6 +75,27 @@
+@@ -74,6 +77,27 @@
  		PlayerAdded?.Invoke(playerData);
  	}
  
@@ -54,7 +56,7 @@
  	public void RemovePlayerData(PlayerData playerData)
  	{
  		if (!m_playersData.Contains(playerData))
-@@ -81,11 +103,27 @@
+@@ -81,16 +105,37 @@
  			throw new InvalidOperationException("Player does not exist.");
  		}
  		m_playersData.Remove(playerData);
@@ -62,15 +64,15 @@
 +		// Multiplayer: an entity that is already gone must not stop the player
 +		// record from being removed, otherwise the avatar would linger forever.
 +		try
- 		{
--			Project.RemoveEntity(playerData.ComponentPlayer.Entity, disposeEntity: true);
++		{
 +			if (playerData.ComponentPlayer != null)
 +			{
 +				Project.RemoveEntity(playerData.ComponentPlayer.Entity, disposeEntity: true);
 +			}
 +		}
 +		catch (Exception ex)
-+		{
+ 		{
+-			Project.RemoveEntity(playerData.ComponentPlayer.Entity, disposeEntity: true);
 +			Log.Warning("Could not remove player entity: " + ex);
 +		}
 +		try
@@ -85,7 +87,70 @@
  		playerData.Dispose();
  	}
  
-@@ -119,8 +157,22 @@
+ 	public void Update(float dt)
+ 	{
++		if (!m_orphanPlayersSwept)
++		{
++			m_orphanPlayersSwept = true;
++			RemoveOrphanedPlayers();
++		}
+ 		if (m_playersData.Count == 0)
+ 		{
+ 			ScreensManager.SwitchScreen("Player", PlayerScreen.Mode.Initial, Project);
+@@ -101,6 +146,52 @@
+ 		}
+ 	}
+ 
++	/// <summary>
++	/// Older builds wrote the multiplayer world snapshot through the host's own
++	/// save, which baked the joining remote avatar into the host world. Those
++	/// avatars reload as ordinary second players and turn the game into an
++	/// unwanted split-screen session. They are recognizable because
++	/// <see cref="PlayerData.SpawnPosition"/> is only assigned by the local
++	/// spawn state machine, so a record that never ran it still has the zero
++	/// default. Remove them once, after the world has fully loaded.
++	/// </summary>
++	private void RemoveOrphanedPlayers()
++	{
++		if (MultiplayerManager.IsActive || MultiplayerManager.IsJoiningProject)
++		{
++			return;
++		}
++		List<PlayerData> list = null;
++		foreach (PlayerData playerData in m_playersData)
++		{
++			if (!playerData.IsRemote && playerData.SpawnPosition == Vector3.Zero)
++			{
++				if (list == null)
++				{
++					list = new List<PlayerData>();
++				}
++				list.Add(playerData);
++			}
++		}
++		if (list == null)
++		{
++			return;
++		}
++		foreach (PlayerData item in list)
++		{
++			int playerIndex = item.PlayerIndex;
++			try
++			{
++				RemovePlayerData(item);
++				Log.Warning("[Multiplayer] Removed orphaned player {0} saved by an older snapshot bug.", playerIndex);
++			}
++			catch (Exception ex)
++			{
++				Log.Warning("[Multiplayer] Could not remove orphaned player {0}: {1}", playerIndex, ex.Message);
++			}
++		}
++	}
++
+ 	public override void Dispose()
+ 	{
+ 		foreach (PlayerData playersDatum in m_playersData)
+@@ -119,8 +210,22 @@
  			PlayerData playerData = new PlayerData(Project);
  			playerData.Load((ValuesDictionary)item.Value);
  			playerData.PlayerIndex = int.Parse(item.Key, CultureInfo.InvariantCulture);
@@ -108,7 +173,7 @@
  	}
  
  	protected override void Save(ValuesDictionary valuesDictionary)
-@@ -131,6 +183,13 @@
+@@ -131,6 +236,13 @@
  		valuesDictionary.SetValue("Players", valuesDictionary2);
  		foreach (PlayerData playersDatum in m_playersData)
  		{

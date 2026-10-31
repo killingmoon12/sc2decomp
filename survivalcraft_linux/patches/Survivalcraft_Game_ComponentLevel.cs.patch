@@ -1,0 +1,23 @@
+--- a/Survivalcraft/Game/ComponentLevel.cs
++++ b/Survivalcraft/Game/ComponentLevel.cs
+@@ -338,6 +338,20 @@
+ 		m_componentPlayer.PlayerStats.HighestLevel = MathUtils.Max(m_componentPlayer.PlayerStats.HighestLevel, m_componentPlayer.PlayerData.Level);
+ 	}
+ 
++	/// <summary>Applies a host-authoritative level on a replica client.</summary>
++	public void SetNetLevel(float level)
++	{
++		PlayerData playerData = m_componentPlayer.PlayerData;
++		playerData.Level = level;
++		// A replica client skips Update(), which is what normally refreshes
++		// the label, so push the synced level straight to the HUD.
++		m_lastLevelTextValue = MathUtils.Floor(level);
++		if (m_componentPlayer.ComponentGui?.LevelLabelWidget != null)
++		{
++			m_componentPlayer.ComponentGui.LevelLabelWidget.Text = "Level " + MathUtils.Floor(level);
++		}
++	}
++
+ 	protected override void Load(ValuesDictionary valuesDictionary, IdToEntityMap idToEntityMap)
+ 	{
+ 		m_subsystemGameInfo = Project.FindSubsystem<SubsystemGameInfo>(throwOnError: true);

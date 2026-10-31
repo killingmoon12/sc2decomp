@@ -108,6 +108,10 @@ public sealed class MultiplayerClient
 
 	private double m_pendingLocalInventoryTime;
 
+	private bool m_loggedLocalPlayerState;
+
+	private bool m_loggedMissingLocalPlayer;
+
 	private bool m_hasPendingLocalInventory;
 
 	private bool m_disconnectHandled;
@@ -153,6 +157,15 @@ public sealed class MultiplayerClient
 		m_channel.Start();
 		m_channel.Send(MultiplayerMessage.Ready, null);
 		m_ready = true;
+		PlayerData playerData = m_subsystemPlayers.PlayersData.FirstOrDefault((PlayerData p) => p.PlayerIndex == MultiplayerManager.LocalPlayerIndex);
+		if (playerData == null)
+		{
+			Log.Warning("[Multiplayer] Local player index {0} is missing from the downloaded world.", MultiplayerManager.LocalPlayerIndex);
+		}
+		else
+		{
+			Log.Information("[Multiplayer] Playing as {0} (player {1}) in a world with {2} players.", playerData.Name, playerData.PlayerIndex, m_subsystemPlayers.PlayersData.Count);
+		}
 		ShowMessage("Connected to " + m_hostDescription);
 	}
 
@@ -722,6 +735,11 @@ public sealed class MultiplayerClient
 		ComponentInventoryBase inventory = componentPlayer?.ComponentMiner?.Inventory as ComponentInventoryBase;
 		if (componentPlayer == null)
 		{
+			if (num2 == MultiplayerManager.LocalPlayerIndex && !m_loggedMissingLocalPlayer)
+			{
+				m_loggedMissingLocalPlayer = true;
+				Log.Warning("[Multiplayer] Local player {0} has no player component in the loaded world.", num2);
+			}
 			return;
 		}
 		if (inventory != null && slotCount > 0 && ShouldApplyLocalInventory(num2, values, counts, activeSlot))
@@ -751,6 +769,17 @@ public sealed class MultiplayerClient
 		if (componentVitalStats != null)
 		{
 			componentVitalStats.SetNetVitals(food, temperature, wetness);
+		}
+		// Level lives on PlayerData, but the HUD label is only refreshed by
+		// ComponentLevel.Update, which a replica client skips.
+		if (componentPlayer.ComponentLevel != null)
+		{
+			componentPlayer.ComponentLevel.SetNetLevel(level);
+		}
+		if (num2 == MultiplayerManager.LocalPlayerIndex && !m_loggedLocalPlayerState)
+		{
+			m_loggedLocalPlayerState = true;
+			Log.Information("[Multiplayer] First player state for local player: health={0:0.##} air={1:0.##} food={2:0.##} level={3:0.##} slots={4}", health, air, food, level, slotCount);
 		}
 	}
 

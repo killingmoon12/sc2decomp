@@ -1,6 +1,6 @@
 --- a/Survivalcraft/Game/ComponentHealth.cs
 +++ b/Survivalcraft/Game/ComponentHealth.cs
-@@ -41,6 +41,14 @@
+@@ -41,6 +41,20 @@
  
  	public float HealthChange { get; private set; }
  
@@ -10,6 +10,12 @@
 +		Health = MathUtils.Saturate(health);
 +		Air = MathUtils.Clamp(air, 0f, MathUtils.Max(AirCapacity, 0f));
 +		m_lastHealth = Health;
++		// A replica client skips Update(), which is what normally pushes the
++		// bar value, so the synced health would never reach the HUD.
++		if (m_componentPlayer?.ComponentGui?.HealthBarWidget != null)
++		{
++			m_componentPlayer.ComponentGui.HealthBarWidget.Value = Health;
++		}
 +	}
 +
  	public BreathingMode BreathingMode { get; private set; }

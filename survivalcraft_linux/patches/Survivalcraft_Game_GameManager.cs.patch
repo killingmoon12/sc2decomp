@@ -1,6 +1,6 @@
 --- a/Survivalcraft/Game/GameManager.cs
 +++ b/Survivalcraft/Game/GameManager.cs
-@@ -50,6 +50,7 @@
+@@ -50,11 +50,33 @@
  			m_subsystemUpdate = m_project.FindSubsystem<SubsystemUpdate>(throwOnError: true);
  		}
  		m_worldInfo = worldInfo;
@@ -8,7 +8,33 @@
  		Log.Information("Loaded world, GameMode={0}, StartingPosition={1}, WorldName={2}, VisibilityRange={3}, Resolution={4}", worldInfo.WorldSettings.GameMode, worldInfo.WorldSettings.StartingPositionMode, worldInfo.WorldSettings.Name, SettingsManager.VisibilityRange.ToString(), SettingsManager.ResolutionMode.ToString());
  		AnalyticsManager.LogEvent("[GameManager] Loaded world", new AnalyticsParameter("GameMode", worldInfo.WorldSettings.GameMode.ToString()), new AnalyticsParameter("EnvironmentBehaviorMode", worldInfo.WorldSettings.EnvironmentBehaviorMode.ToString()), new AnalyticsParameter("TerrainGenerationMode", worldInfo.WorldSettings.TerrainGenerationMode.ToString()), new AnalyticsParameter("WorldDirectory", worldInfo.DirectoryName), new AnalyticsParameter("WorldName", worldInfo.WorldSettings.Name), new AnalyticsParameter("WorldSeedString", worldInfo.WorldSettings.Seed), new AnalyticsParameter("VisibilityRange", SettingsManager.VisibilityRange.ToString()), new AnalyticsParameter("Resolution", SettingsManager.ResolutionMode.ToString()));
  		GC.Collect();
-@@ -108,6 +109,7 @@
+ 	}
+ 
++	/// <summary>
++	/// Serializes the live project to a Project.xml element without touching
++	/// the world directory. Used to build a world snapshot for a joining
++	/// client: writing the snapshot through SaveProject would also write the
++	/// joining remote player into the host's own save, so a later crash or
++	/// alt-F4 would reload the world with that avatar as a local splitscreen
++	/// player.
++	/// </summary>
++	public static XElement CreateProjectXml()
++	{
++		if (m_project == null)
++		{
++			return null;
++		}
++		ProjectData projectData = m_project.Save();
++		XElement xElement = new XElement("Project");
++		projectData.Save(xElement);
++		XmlUtils.SetAttributeValue(xElement, "Version", VersionsManager.SerializationVersion);
++		return xElement;
++	}
++
+ 	public static void SaveProject(bool waitForCompletion, bool showErrorDialog)
+ 	{
+ 		if (m_project == null)
+@@ -108,6 +130,7 @@
  	{
  		if (m_project != null)
  		{
@@ -16,7 +42,7 @@
  			m_subsystemUpdate.Update();
  		}
  	}
-@@ -116,6 +118,7 @@
+@@ -116,6 +139,7 @@
  	{
  		if (m_project != null)
  		{

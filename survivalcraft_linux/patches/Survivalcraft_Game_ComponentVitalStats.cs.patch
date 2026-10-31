@@ -1,6 +1,6 @@
 --- a/Survivalcraft/Game/ComponentVitalStats.cs
 +++ b/Survivalcraft/Game/ComponentVitalStats.cs
-@@ -69,6 +69,14 @@
+@@ -69,6 +69,20 @@
  
  	public float EnvironmentTemperature => m_environmentTemperature;
  
@@ -10,6 +10,12 @@
 +		m_food = MathUtils.Saturate(food);
 +		m_temperature = MathUtils.Clamp(temperature, 0f, 24f);
 +		m_wetness = MathUtils.Saturate(wetness);
++		// A replica client skips Update(), which is what normally pushes the
++		// bar value, so the synced food would never reach the HUD.
++		if (m_componentPlayer?.ComponentGui?.FoodBarWidget != null)
++		{
++			m_componentPlayer.ComponentGui.FoodBarWidget.Value = m_food;
++		}
 +	}
 +
  	public float Food
