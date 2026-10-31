@@ -40,6 +40,9 @@ public sealed class MultiplayerServer : IDisposable
 
 		public PlayerData PlayerData;
 
+		/// <summary>Set once <c>Hello</c> has been accepted; prevents replays.</summary>
+		public bool HelloReceived;
+
 		public bool SnapshotSent;
 
 		public bool Ready;
@@ -442,6 +445,13 @@ public sealed class MultiplayerServer : IDisposable
 		{
 		case MultiplayerMessage.Hello:
 		{
+			// A client that has already been accepted must not re-run the
+			// handshake (it would create a second player and entity).
+			if (slot.HelloReceived)
+			{
+				slot.Channel.Close("Duplicate Hello.");
+				return;
+			}
 			int num = engineBinaryReader.ReadInt32();
 			string text = engineBinaryReader.ReadString();
 			if (num != MultiplayerProtocol.Version)
@@ -454,6 +464,7 @@ public sealed class MultiplayerServer : IDisposable
 				return;
 			}
 			slot.Name = SanitizeName(text);
+			slot.HelloReceived = true;
 			AcceptClient(slot);
 			break;
 		}
@@ -482,12 +493,22 @@ public sealed class MultiplayerServer : IDisposable
 			break;
 		case MultiplayerMessage.ChatMessage:
 		{
+			// Only a fully joined client may send chat.
+			if (!slot.Ready)
+			{
+				break;
+			}
 			string text2 = engineBinaryReader.ReadString();
 			BroadcastChat(slot.Name, text2);
 			break;
 		}
 		case MultiplayerMessage.BlockInventory:
 		{
+			// Only a fully joined client may edit block inventories.
+			if (!slot.Ready)
+			{
+				break;
+			}
 			// Apply the client's edit and relay it to everybody else: the
 			// diff-based sync below only notices local changes.
 			m_inventoryRecords.Clear();
@@ -498,6 +519,11 @@ public sealed class MultiplayerServer : IDisposable
 		}
 		case MultiplayerMessage.PlayerInventory:
 		{
+			// Only a fully joined client may edit its own inventory.
+			if (!slot.Ready)
+			{
+				break;
+			}
 			int playerIndex = engineBinaryReader.ReadInt32();
 			int activeSlot = engineBinaryReader.ReadInt32();
 			int slotCount = engineBinaryReader.ReadInt32();
@@ -563,7 +589,35 @@ public sealed class MultiplayerServer : IDisposable
 		Entity entity = MultiplayerEntities.CreatePlayerEntity(m_project, playerData, spawnPosition, Quaternion.CreateFromAxisAngle(Vector3.UnitY, MathUtils.DegToRad(45f)));
 		m_project.AddEntity(entity);
 		Log.Information("[Multiplayer] {0} joined as player {1}", slot.Name, playerData.PlayerIndex);
-		SendSnapshot(slot);
+		try
+		{
+			SendSnapshot(slot);
+		}
+		catch (Exception ex)
+		{
+			// The player entity and record were already added to the world;
+			// if the snapshot cannot be produced, remove them so no ghost
+			// player lingers.
+			Log.Warning("[Multiplayer] Could not send snapshot to {0}: {1}", slot.Name, ex.Message);
+			try
+			{
+				m_project.RemoveEntity(entity, disposeEntity: true);
+			}
+			catch (Exception)
+			{
+			}
+			try
+			{
+				m_subsystemPlayers.RemovePlayerData(playerData);
+			}
+			catch (Exception)
+			{
+			}
+			slot.PlayerData = null;
+			slot.PlayerIndex = -1;
+			DisconnectClient(slot, "Could not create world snapshot.");
+			return;
+		}
 		BroadcastChat(null, slot.Name + " joined the game");
 		BroadcastPlayerList();
 	}
@@ -862,7 +916,16 @@ public sealed class MultiplayerServer : IDisposable
 					writer.Write(list2.Count);
 					foreach (KeyValuePair<int, Entity> item5 in list2)
 					{
-						WriteEntityUpdate(writer, item5.Key, item5.Value);
+						try
+						{
+							WriteEntityUpdate(writer, item5.Key, item5.Value);
+						}
+						catch (Exception ex)
+						{
+							// One entity that cannot be serialized must not
+							// prevent every other entity from being streamed.
+							Log.Warning("[Multiplayer] Could not write entity update for net id {0}: {1}", item5.Key, ex.Message);
+						}
 					}
 				});
 			}

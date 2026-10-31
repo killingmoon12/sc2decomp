@@ -431,6 +431,12 @@ public sealed class MultiplayerClient
 	/// <summary>Applies the non-transform parts of a player state on a client.</summary>
 	private void ApplyPlayerState(Entity entity, EntityState state)
 	{
+		ComponentBody componentBody = entity.FindComponent<ComponentBody>(throwOnError: false);
+		if (componentBody != null)
+		{
+			componentBody.Velocity = state.Velocity;
+			componentBody.TargetCrouchFactor = state.CrouchFactor;
+		}
 		ComponentHealth componentHealth = entity.FindComponent<ComponentHealth>(throwOnError: false);
 		if (componentHealth != null && state.HasHealth)
 		{
