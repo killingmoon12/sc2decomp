@@ -676,7 +676,7 @@ public sealed class MultiplayerClient
 		// The host writes it as an int, so it must be consumed as one, or
 		// every following field is read three bytes early.
 		_ = reader.ReadInt32();
-		bool hasPlayer = reader.ReadBoolean();
+		bool hasPlayer = reader.ReadInt32() != 0;
 		PlayerData playerData;
 		try
 		{
